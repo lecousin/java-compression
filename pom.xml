@@ -36,7 +36,7 @@
   		<dependency>
 	  		<groupId>net.lecousin</groupId>
 	  		<artifactId>core</artifactId>
-	  		<version>0.8</version>
+	  		<version>0.8.0</version>
   		</dependency>
   	</dependencies>
   </dependencyManagement>
