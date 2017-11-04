@@ -464,16 +464,12 @@ public class GZipReadable extends IO.AbstractIO implements IO.Readable {
 	@Override
 	public long skipSync(long n) throws IOException {
 		if (n <= 0) return 0;
-		return IOUtil.skipSync(this, n);
+		return IOUtil.skipSyncByReading(this, n);
 	}
 
 	@Override
 	public AsyncWork<Long, IOException> skipAsync(long n, RunnableWithParameter<Pair<Long, IOException>> ondone) {
-		if (n <= 0) {
-			if (ondone != null) ondone.run(new Pair<>(Long.valueOf(0), null));
-			return new AsyncWork<>(Long.valueOf(0), null);
-		}
-		return IOUtil.skipAsync(this, n, ondone).getSynch();
+		return IOUtil.skipAsyncByReading(this, n, ondone);
 	}
 
 	@Override

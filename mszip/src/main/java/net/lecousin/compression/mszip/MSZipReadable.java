@@ -299,12 +299,12 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 
 	@Override
 	public long skipSync(long n) throws IOException {
-		return IOUtil.skipSync(this, n);
+		return IOUtil.skipSyncByReading(this, n);
 	}
 
 	@Override
 	public AsyncWork<Long, IOException> skipAsync(long n, RunnableWithParameter<Pair<Long, IOException>> ondone) {
-		return IOUtil.skipAsync(this, n, ondone).getSynch();
+		return IOUtil.skipAsyncByReading(this, n, ondone);
 	}
 
 	@Override

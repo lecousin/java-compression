@@ -7,8 +7,8 @@ import java.util.Collection;
 import java.util.zip.GZIPOutputStream;
 
 import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.core.tests.io.TestIO;
-import net.lecousin.framework.core.tests.io.TestReadable;
+import net.lecousin.framework.core.test.io.TestIO;
+import net.lecousin.framework.core.test.io.TestReadable;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.SimpleBufferedReadable;

@@ -305,7 +305,7 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 	@Override
 	public long skipSync(long n) throws IOException {
 		if (!getInflater.isUnblocked()) getInflater.block(0);
-		return IOUtil.skipSync(this, n);
+		return IOUtil.skipSyncByReading(this, n);
 	}
 
 	@Override
@@ -320,7 +320,7 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 			});
 			return res;
 		}
-		return IOUtil.skipAsync(this, n, ondone).getSynch();
+		return IOUtil.skipAsyncByReading(this, n, ondone);
 	}
 	
 }
