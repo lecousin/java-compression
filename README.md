@@ -13,7 +13,7 @@ So far only few compression methods are implemented, more will come...
 
 Master: ![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=master "Build Status")
 
-Branch 0.1: ![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=0.2 "Build Status")
+Branch 0.1: ![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=0.1 "Build Status")
 
 Modules with current version:
  * deflate 0.1.0
