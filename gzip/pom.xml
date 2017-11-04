@@ -3,16 +3,21 @@
   <parent>
     <groupId>net.lecousin.compression</groupId>
     <artifactId>parent-pom</artifactId>
-    <version>0.1</version>
+    <version>0.1.0</version>
   </parent>
   
   <artifactId>gzip</artifactId>
+  <version>0.1.0</version>
+  
+  <name>lecousin.net Java framework - compression gzip</name>
+  <description>GZip compression and decompression</description>
+  <url>https://github.com/lecousin/java-compression</url>
 
   <dependencies>
     <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>deflate</artifactId>
-      <version>0.1</version>
+      <version>0.1.0</version>
     </dependency>
     <dependency>
       <groupId>net.lecousin</groupId>
@@ -26,4 +31,99 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <licenses>
+    <license>
+      <name>Apache 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+    
+  <developers>
+    <developer>
+    	<id>lecousin</id>
+    	<name>Guillaume Le Cousin</name>
+    </developer>
+  </developers>
+  
+  <scm>
+    <connection>scm:git:https://github.com/lecousin/java-compression.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com:lecousin/java-compression.git</developerConnection>
+    <url>https://github.com/lecousin/java-compression</url>
+    <tag>HEAD</tag>
+  </scm>
+
+  <distributionManagement>
+    <repository>
+      <id>ossrh</id>
+      <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+    </repository>
+    <snapshotRepository>
+      <id>ossrh</id>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+    </snapshotRepository>
+  </distributionManagement>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>2.2.1</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals><goal>jar-no-fork</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>2.9.1</version>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals><goal>jar</goal></goals>
+            <configuration>
+              <additionalparam>-Xdoclint:none</additionalparam>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>ossrh</id>
+      <activation>
+        <property>
+          <name>ossrh</name><value>true</value>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>1.5</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals><goal>sign</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
 </project>
