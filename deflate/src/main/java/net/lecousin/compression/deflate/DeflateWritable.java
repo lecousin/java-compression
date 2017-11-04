@@ -11,6 +11,7 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.io.util.LimitWriteOperations;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.RunnableWithParameter;
 
@@ -22,15 +23,17 @@ import net.lecousin.framework.util.RunnableWithParameter;
 public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 	
 	/** Constructor. */
-	public DeflateWritable(IO.Writable output, byte priority, int level) {
+	public DeflateWritable(IO.Writable output, byte priority, int level, boolean nowrap, int maxPendingWrite) {
 		this.output = output;
 		this.priority = priority;
-		deflater = new Deflater(level);
+		deflater = new Deflater(level, nowrap);
+		writeOps = new LimitWriteOperations(output, maxPendingWrite);
 	}
 	
-	private IO.Writable output;
-	private byte priority;
-	private Deflater deflater;
+	protected IO.Writable output;
+	protected byte priority;
+	protected Deflater deflater;
+	protected LimitWriteOperations writeOps;
 
 	@Override
 	public TaskManager getTaskManager() {
@@ -72,6 +75,11 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 			deflater.setInput(buf);
 		}
 		byte[] writeBuf = new byte[len];
+		AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
+		if (lastWrite != null) {
+			lastWrite.block(0);
+			if (lastWrite.hasError()) throw lastWrite.getError();
+		}
 		while (!deflater.needsInput()) {
 			int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
 			if (nb <= 0) break;
@@ -82,9 +90,9 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 	
 	@Override
 	public AsyncWork<Integer,IOException> writeAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
-		Task<Integer,IOException> task = new Task.Cpu<Integer,IOException>("Writing data with zip compression", priority, ondone) {
+		Task<Integer,IOException> task = new Task.Cpu<Integer,IOException>("Compressing data using deflate", priority, ondone) {
 			@Override
-			public Integer run() {
+			public Integer run() throws IOException {
 				if (isCancelled()) return Integer.valueOf(0);
 				int len = buffer.remaining();
 				if (buffer.hasArray())
@@ -98,7 +106,7 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 					byte[] writeBuf = new byte[len > 8192 ? 8192 : len];
 					int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
 					if (nb <= 0) break;
-					output.writeAsync(ByteBuffer.wrap(writeBuf, 0, nb));
+					writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb));
 				}
 				return Integer.valueOf(len);
 			}
@@ -109,6 +117,11 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 	
 	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */
 	public void finishSynch() throws IOException {
+		AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
+		if (lastWrite != null) {
+			lastWrite.block(0);
+			if (lastWrite.hasError()) throw lastWrite.getError();
+		}
 		deflater.finish();
 		if (!deflater.finished()) {
 			byte[] writeBuf = new byte[1024];
@@ -121,24 +134,29 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 	}
 	
 	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */
-	public Task<Void,IOException> finishAsynch() {
+	public ISynchronizationPoint<IOException> finishAsynch() {
 		Task<Void,IOException> task = new Task.Cpu<Void,IOException>("Finishing zip compression", priority) {
 			@Override
-			public Void run() {
+			public Void run() throws IOException {
 				deflater.finish();
 				if (!deflater.finished()) {
-					byte[] writeBuf = new byte[1024];
 					do {
+						byte[] writeBuf = new byte[1024];
 						int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
 						if (nb <= 0) break;
-						output.writeAsync(ByteBuffer.wrap(writeBuf, 0, nb));
+						writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb));
 					} while (!deflater.finished());
+				}
+				AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
+				if (lastWrite != null) {
+					lastWrite.block(0);
+					if (lastWrite.hasError()) throw lastWrite.getError();
 				}
 				return null;
 			}
 		};
 		task.start();
-		return task;
+		return task.getSynch();
 	}
 
 }

@@ -10,7 +10,7 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Writable;
-import net.lecousin.framework.io.util.LimitWriteOperations;
+import net.lecousin.framework.io.util.LimitWriteOperationsReuseBuffers;
 
 /**
  * Compress a Readable into a Writable using deflate method.
@@ -46,7 +46,7 @@ public class DeflateCompressor {
 	/** Compress from a Readable to a Writable. */
 	public AsyncWork<Void, Exception> compress(Readable input, Writable output, int bufferSize, int maxBuffers, byte priority) {
 		Deflater deflater = new Deflater(level, nowrap);
-		LimitWriteOperations limit = new LimitWriteOperations(output, bufferSize, maxBuffers);
+		LimitWriteOperationsReuseBuffers limit = new LimitWriteOperationsReuseBuffers(output, bufferSize, maxBuffers);
 		byte[] bufRead = new byte[bufferSize];
 		ByteBuffer buffer = ByteBuffer.wrap(bufRead);
 		AsyncWork<Integer,IOException> task = input.readAsync(buffer);
@@ -58,7 +58,7 @@ public class DeflateCompressor {
 	private static class Compress extends Task.Cpu<Void,Exception> {
 		private Compress(
 			Readable input, Writable output, AsyncWork<Integer,IOException> readTask, byte[] readBuf,
-			Deflater delfater, LimitWriteOperations limit, byte priority, AsyncWork<Void, Exception> end
+			Deflater delfater, LimitWriteOperationsReuseBuffers limit, byte priority, AsyncWork<Void, Exception> end
 		) {
 			super("Zip compression", priority);
 			this.input = input;
@@ -82,7 +82,7 @@ public class DeflateCompressor {
 		private AsyncWork<Integer,IOException> readTask;
 		private byte[] readBuf;
 		private Deflater deflater;
-		private LimitWriteOperations limit;
+		private LimitWriteOperationsReuseBuffers limit;
 		private AsyncWork<Void, Exception> end;
 		
 		@Override
