@@ -10,26 +10,32 @@ import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.memory.IMemoryManageable;
 import net.lecousin.framework.memory.MemoryManager;
 
+/**
+ * Cache of inflaters, to reuse them.
+ */
 public class InflaterCache implements IMemoryManageable {
 
-	private InflaterCache() { MemoryManager.register(this); }
+	private InflaterCache() { /* singleton */ }
+	
 	static {
-		new InflaterCache();
+		// instantiate singleton and register it
+		MemoryManager.register(new InflaterCache());
 	}
 	
 	private static TurnArray<Inflater> w = new TurnArray<Inflater>(5);
 	private static TurnArray<Inflater> nw = new TurnArray<Inflater>(5);
 	
+	/** Get an inflater. */
 	public static AsyncWork<Inflater,NoException> get(boolean nowrap) {
 		if (nowrap) {
 			synchronized (nw) {
-				if(!nw.isEmpty())
+				if (!nw.isEmpty())
 					return new AsyncWork<>(nw.removeFirst(),null);
 			}
 			return new CreateInflater(true).getSynch();
 		}
 		synchronized (w) {
-			if(!w.isEmpty())
+			if (!w.isEmpty())
 				return new AsyncWork<>(w.removeFirst(),null);
 		}
 		return new CreateInflater(false).getSynch();
@@ -41,13 +47,16 @@ public class InflaterCache implements IMemoryManageable {
 			this.nowrap = nowrap;
 			start();
 		}
+		
 		private boolean nowrap;
+		
 		@Override
 		public Inflater run() {
 			return new Inflater(nowrap);
 		}
 	}
 	
+	/** Release a deflater. The end method must not be called, else the inflater cannot be reused. */
 	public static void free(Inflater inf, boolean nowrap) {
 		inf.reset();
 		if (nowrap) {
@@ -63,8 +72,9 @@ public class InflaterCache implements IMemoryManageable {
 	
 	@Override
 	public String getDescription() {
-		return "Inflater cache ("+(w.size()+nw.size())+" inflaters)";
+		return "Inflater cache (" + (w.size() + nw.size()) + " inflaters)";
 	}
+	
 	@Override
 	public List<String> getItemsDescription() {
 		return null;

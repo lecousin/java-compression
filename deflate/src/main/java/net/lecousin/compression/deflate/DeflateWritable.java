@@ -14,8 +14,14 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.RunnableWithParameter;
 
+/**
+ * Deflate compression: wrap a Writable and compress data in it.
+ * One of the method finishSync or finishAsync must be called when no more data needs to be compressed.
+ * It uses the {@link Deflater} provided by Java.
+ */
 public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 	
+	/** Constructor. */
 	public DeflateWritable(IO.Writable output, byte priority, int level) {
 		this.output = output;
 		this.priority = priority;
@@ -30,16 +36,21 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 	public TaskManager getTaskManager() {
 		return Threading.getCPUTaskManager();
 	}
+	
 	@Override
 	public IO getWrappedIO() { return null; }
+	
 	@Override
 	public String getSourceDescription() {
-		return "Zip compression to "+output.getSourceDescription();
+		return "Zip compression to " + output.getSourceDescription();
 	}
+	
 	@Override
 	public byte getPriority() { return priority; }
+	
 	@Override
 	public void setPriority(byte priority) { this.priority = priority; }
+	
 	@Override
 	protected ISynchronizationPoint<IOException> closeIO() {
 		return output.closeAsync();
@@ -96,6 +107,7 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 		return task.getSynch();
 	}
 	
+	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */
 	public void finishSynch() throws IOException {
 		deflater.finish();
 		if (!deflater.finished()) {
@@ -108,6 +120,7 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 		}
 	}
 	
+	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */
 	public Task<Void,IOException> finishAsynch() {
 		Task<Void,IOException> task = new Task.Cpu<Void,IOException>("Finishing zip compression", priority) {
 			@Override

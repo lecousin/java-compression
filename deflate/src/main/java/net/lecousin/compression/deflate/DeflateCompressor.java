@@ -12,15 +12,30 @@ import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Writable;
 import net.lecousin.framework.io.util.LimitWriteOperations;
 
+/**
+ * Compress a Readable into a Writable using deflate method.
+ * It uses the {@link Deflater} provided by Java.
+ */
 public class DeflateCompressor {
 
+	/** Constructor.
+	 * @param level one of the value defined in {@link Deflater}.
+	 * @param nowrap if true then support GZIP compatible compression
+	 */
 	public DeflateCompressor(int level, boolean nowrap) {
 		this.level = level;
 		this.nowrap = nowrap;
 	}
+	
+	/** Constructor with default compression level to BEST_COMPRESSION.
+	 * @param nowrap if true then support GZIP compatible compression
+	 */
 	public DeflateCompressor(boolean nowrap) {
 		this(Deflater.BEST_COMPRESSION, nowrap);
 	}
+
+	/** Constructor with default compression level to BEST_COMPRESSION and nowrap to false.
+	 */
 	public DeflateCompressor() {
 		this(Deflater.BEST_COMPRESSION, false);
 	}
@@ -28,6 +43,7 @@ public class DeflateCompressor {
 	private int level;
 	private boolean nowrap;
 	
+	/** Compress from a Readable to a Writable. */
 	public AsyncWork<Void, Exception> compress(Readable input, Writable output, int bufferSize, int maxBuffers, byte priority) {
 		Deflater deflater = new Deflater(level, nowrap);
 		LimitWriteOperations limit = new LimitWriteOperations(output, bufferSize, maxBuffers);
@@ -40,7 +56,10 @@ public class DeflateCompressor {
 	}
 	
 	private static class Compress extends Task.Cpu<Void,Exception> {
-		public Compress(Readable input, Writable output, AsyncWork<Integer,IOException> readTask, byte[] readBuf, Deflater delfater, LimitWriteOperations limit, byte priority, AsyncWork<Void, Exception> end) {
+		private Compress(
+			Readable input, Writable output, AsyncWork<Integer,IOException> readTask, byte[] readBuf,
+			Deflater delfater, LimitWriteOperations limit, byte priority, AsyncWork<Void, Exception> end
+		) {
 			super("Zip compression", priority);
 			this.input = input;
 			this.output = output;
@@ -57,6 +76,7 @@ public class DeflateCompressor {
 				}
 			});
 		}
+		
 		private Readable input;
 		private Writable output;
 		private AsyncWork<Integer,IOException> readTask;
@@ -64,6 +84,7 @@ public class DeflateCompressor {
 		private Deflater deflater;
 		private LimitWriteOperations limit;
 		private AsyncWork<Void, Exception> end;
+		
 		@Override
 		public Void run() throws Exception {
 			if (readTask.isCancelled() || end.isCancelled()) return null;
@@ -80,7 +101,7 @@ public class DeflateCompressor {
 					// end of data
 					deflater.finish();
 					while (!deflater.finished()) {
-						nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity()-pos);
+						nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity() - pos);
 						if (nb <= 0) break;
 						pos += nb;
 					}
@@ -89,7 +110,7 @@ public class DeflateCompressor {
 				} else {
 					deflater.setInput(readBuf, 0, nb);
 					while (!deflater.needsInput() && !end.isCancelled()) {
-						nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity()-pos);
+						nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity() - pos);
 						if (nb <= 0) break;
 						pos += nb;
 						if (pos == writeBuf.capacity()) {
@@ -135,6 +156,7 @@ public class DeflateCompressor {
 			}
 			return null;
 		}
+		
 		private AsyncWork<Integer,IOException> writeCompressedData(ByteBuffer writeBuf, int nb) throws IOException {
 			writeBuf.limit(nb);
 			writeBuf.position(0);

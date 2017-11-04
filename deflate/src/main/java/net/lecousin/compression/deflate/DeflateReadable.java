@@ -17,24 +17,34 @@ import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.RunnableWithParameter;
 
+/**
+ * Deflate decompression: wrap a Readable to uncompress it.
+ * It uses the {@link Inflater} provided by Java.
+ */
 public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 	
+	/** DeflateReadable with a known uncompressed size. */
 	public static class SizeKnown extends DeflateReadable implements IO.KnownSize {
+		/** Constructor. */
 		public SizeKnown(IO.Readable input, byte priority, long uncompressedSize, boolean nowrap) {
 			super(input, priority, nowrap);
 			this.uncompressedSize = uncompressedSize;
 		}
+
 		private long uncompressedSize;
+		
 		@Override
 		public AsyncWork<Long, IOException> getSizeAsync() {
 			return new AsyncWork<>(new Long(uncompressedSize), null);
 		}
+		
 		@Override
 		public long getSizeSync() {
 			return uncompressedSize;
 		}
 	}
 	
+	/** Constructor. */
 	public DeflateReadable(IO.Readable input, byte priority, boolean nowrap) {
 		getInflater = InflaterCache.get(nowrap);
 		this.input = input;
@@ -49,13 +59,16 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 	private ByteBuffer readBuf = ByteBuffer.allocate(8192);
 	private Task<Integer,IOException> readTask = null;
 	private boolean reachEOF = false;
+	private ISynchronizationPoint<IOException> closing = null;
 
 	@Override
 	public TaskManager getTaskManager() {
 		return Threading.getCPUTaskManager();
 	}
+	
 	@Override
 	public byte getPriority() { return priority; }
+	
 	@Override
 	public void setPriority(byte priority) { this.priority = priority; }
 
@@ -67,11 +80,20 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 
 	@Override
 	protected ISynchronizationPoint<IOException> closeIO() {
-		if (!getInflater.isUnblocked()) getInflater.block(0); // TODO async
+		if (closing != null) return closing;
+		if (!getInflater.isUnblocked()) {
+			SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
+			closing = sp;
+			getInflater.listenInline(() -> {
+				InflaterCache.free(getInflater.getResult(), nowrap);
+				input.closeAsync().listenInline(sp);
+			});
+			return sp;
+		}
 		// do not end, because this closes it definitely and the cache wants to reuse it
 		// getInflater.getResult().end();
 		InflaterCache.free(getInflater.getResult(), nowrap);
-		return input.closeAsync();
+		return closing = input.closeAsync();
 	}
 	
 	@Override
@@ -85,12 +107,7 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 	public AsyncWork<Integer,IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
 		if (!getInflater.isUnblocked()) {
 			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
-			getInflater.listenInline(new Runnable() {
-				@Override
-				public void run() {
-					readAsync(buffer, ondone).listenInline(res);
-				}
-			});
+			getInflater.listenInline(() -> { readAsync(buffer, ondone).listenInline(res); });
 			return res;
 		}
 		if (reachEOF) {
@@ -98,10 +115,12 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
 		}
 		if (readTask != null && !readTask.isDone()) {
-			Task<Integer,IOException> task = new Task.Cpu<Integer,IOException>("Waiting for previous uncompression task", Task.PRIORITY_IMPORTANT, ondone) {
+			Task<Integer,IOException> task = new Task.Cpu<Integer,IOException>(
+				"Waiting for previous uncompression task", Task.PRIORITY_IMPORTANT, ondone
+			) {
 				@Override
 				public Integer run() throws IOException {
-					return Integer.valueOf(_readSync(buffer));
+					return Integer.valueOf(readBufferSync(buffer));
 				}
 			};
 			readTask.ondone(task, false);
@@ -109,7 +128,9 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 			return task.getSynch();
 		}
 		if (!getInflater.getResult().needsInput()) {
-			Task<Integer,IOException> inflate = new Task.Cpu<Integer,IOException>("Uncompressing zip: "+input.getSourceDescription(), priority, ondone) {
+			Task<Integer,IOException> inflate = new Task.Cpu<Integer,IOException>(
+				"Uncompressing zip: " + input.getSourceDescription(), priority, ondone
+			) {
 				@Override
 				public Integer run() throws IOException {
 					byte[] b;
@@ -126,21 +147,21 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 						int n;
 						int total = 0;
 						do {
-							while ((n = inflater.inflate(b, off+total, buffer.remaining()-total)) == 0) {
+							while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
 								if (total > 0) break;
 				                if (inflater.finished() || inflater.needsDictionary()) {
 				                    reachEOF = true;
 			                    	return Integer.valueOf(-1);
 				                }
 				                if (inflater.needsInput())
-									return Integer.valueOf(_readSync(buffer));
+									return Integer.valueOf(readBufferSync(buffer));
 				            }
 							total += n;
 						} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
 						if (!buffer.hasArray())
 							buffer.put(b, 0, total);
 						else
-							buffer.position(off+total);
+							buffer.position(off + total);
 						return Integer.valueOf(total);
 					} catch (DataFormatException e) {
 						throw new IOException(e);
@@ -158,7 +179,9 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 		}
 		readBuf.clear();
 		AsyncWork<Integer,IOException> read = input.readAsync(readBuf);
-		Task<Integer,IOException> inflate = new Task.Cpu<Integer,IOException>("Uncompressing zip: "+input.getSourceDescription(), priority, ondone) {
+		Task<Integer,IOException> inflate = new Task.Cpu<Integer,IOException>(
+			"Uncompressing zip: " + input.getSourceDescription(), priority, ondone
+		) {
 			@Override
 			public Integer run() throws IOException {
 				if (!read.isSuccessful())
@@ -181,24 +204,25 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 					int n;
 					int total = 0;
 					do {
-						while ((n = inflater.inflate(b, off+total, buffer.remaining()-total)) == 0) {
+						while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
 							if (total > 0) break;
 			                if (inflater.finished() || inflater.needsDictionary()) {
 			                    reachEOF = true;
 		                    	return Integer.valueOf(-1);
 			                }
 			                if (inflater.needsInput())
-								return Integer.valueOf(_readSync(buffer));
+								return Integer.valueOf(readBufferSync(buffer));
 			            }
 						total += n;
 					} while (n > 0 && !inflater.needsInput());
 					if (!buffer.hasArray())
 						buffer.put(b, 0, total);
 					else
-						buffer.position(off+total);
+						buffer.position(off + total);
 					return Integer.valueOf(total);
 				} catch (DataFormatException e) {
-					throw new IOException("Inflate error after " + inflater.getBytesRead() + " compressed bytes read, and " + inflater.getBytesWritten() + " uncompressed bytes written", e);
+					throw new IOException("Inflate error after " + inflater.getBytesRead()
+						+ " compressed bytes read, and " + inflater.getBytesWritten() + " uncompressed bytes written", e);
 				}
 			}
 		};
@@ -212,9 +236,10 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 		if (!getInflater.isUnblocked()) getInflater.block(0);
 		if (readTask != null && !readTask.isDone())
 			readTask.getSynch().block(0);
-		return _readSync(buffer);
+		return readBufferSync(buffer);
 	}
-	private int _readSync(ByteBuffer buffer) throws IOException {
+	
+	private int readBufferSync(ByteBuffer buffer) throws IOException {
 		if (reachEOF) return -1;
 		byte[] b;
 		int off;
@@ -238,12 +263,13 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 			if (!buffer.hasArray())
 				buffer.put(b, 0, n);
 			else
-				buffer.position(off+n);
+				buffer.position(off + n);
 			return n;
 		} catch (DataFormatException e) {
 			throw new IOException(e);
 		}
 	}
+	
 	private void fill() throws IOException {
 		readBuf.clear();
 		int len = input.readSync(readBuf);
