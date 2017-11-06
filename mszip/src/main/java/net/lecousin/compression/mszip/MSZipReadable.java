@@ -338,16 +338,6 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 	}
 
 	@Override
-	public int getRemainingBufferedSize() {
-		return 32768; // TODO ?
-	}
-
-	@Override
-	public int getMaxBufferedSize() {
-		return 32768; // TODO ?
-	}
-
-	@Override
 	protected ISynchronizationPoint<IOException> closeIO() {
 		return input.closeAsync();
 	}
