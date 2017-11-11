@@ -10,6 +10,7 @@ import net.lecousin.framework.concurrent.Threading;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.LimitWriteOperations;
 import net.lecousin.framework.util.Pair;
@@ -135,28 +136,33 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 	
 	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */
 	public ISynchronizationPoint<IOException> finishAsynch() {
-		Task<Void,IOException> task = new Task.Cpu<Void,IOException>("Finishing zip compression", priority) {
+		SynchronizationPoint<IOException> result = new SynchronizationPoint<>();
+		Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Finishing zip compression", priority) {
 			@Override
-			public Void run() throws IOException {
+			public Void run() {
+				AsyncWork<Integer, IOException> lastWrite = null;
 				deflater.finish();
 				if (!deflater.finished()) {
 					do {
 						byte[] writeBuf = new byte[1024];
 						int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
 						if (nb <= 0) break;
-						writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb));
+						try { lastWrite = writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb)); }
+						catch (IOException e) {
+							result.error(e);
+							return null;
+						}
 					} while (!deflater.finished());
 				}
-				AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
-				if (lastWrite != null) {
-					lastWrite.block(0);
-					if (lastWrite.hasError()) throw lastWrite.getError();
-				}
+				if (lastWrite != null)
+					lastWrite.listenInline(result);
+				else
+					result.unblock();
 				return null;
 			}
 		};
 		task.start();
-		return task.getSynch();
+		return result;
 	}
 
 }
