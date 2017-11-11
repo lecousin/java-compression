@@ -54,7 +54,7 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 		
 		@Override
 		public AsyncWork<Long, IOException> getSizeAsync() {
-			return new AsyncWork<>(new Long(uncompressedSize), null);
+			return new AsyncWork<>(Long.valueOf(uncompressedSize), null);
 		}
 		
 		@Override
@@ -170,10 +170,10 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 		if (error != null) throw error;
 		if (uncompress.pos < uncompress.size)
 			return uncompress.uncompressed[uncompress.pos++] & 0xFF;
-		// current block is completely read
-		if (nextUncompress == null)
-			return -1;
 		synchronized (this) {
+			// current block is completely read
+			if (nextUncompress == null)
+				return -1;
 			uncompress = nextUncompress;
 			if (!eof)
 				nextUncompress = new BlockUncompressor(uncompress.blockIndex + 1);
@@ -195,9 +195,9 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 			return l;
 		}
 		// current block is completely read
-		if (nextUncompress == null)
-			return -1;
 		synchronized (this) {
+			if (nextUncompress == null)
+				return -1;
 			uncompress = nextUncompress;
 			if (!eof)
 				nextUncompress = new BlockUncompressor(uncompress.blockIndex + 1);
@@ -223,10 +223,10 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 			uncompress.pos += l;
 			return l;
 		}
-		// current block is completely read
-		if (nextUncompress == null)
-			return -1;
 		synchronized (this) {
+			// current block is completely read
+			if (nextUncompress == null)
+				return -1;
 			uncompress = nextUncompress;
 			if (!eof)
 				nextUncompress = new BlockUncompressor(uncompress.blockIndex + 1);

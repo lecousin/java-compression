@@ -37,7 +37,7 @@ public class GZipReadable extends IO.AbstractIO implements IO.Readable {
 		
 		@Override
 		public AsyncWork<Long, IOException> getSizeAsync() {
-			return new AsyncWork<>(new Long(uncompressedSize), null);
+			return new AsyncWork<>(Long.valueOf(uncompressedSize), null);
 		}
 		
 		@Override
