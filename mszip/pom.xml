@@ -4,12 +4,11 @@
   <parent>
   	<groupId>net.lecousin.compression</groupId>
   	<artifactId>parent-pom</artifactId>
-  	<version>0.1.0</version>
+  	<version>0.1.1</version>
   	<relativePath>..</relativePath>
   </parent>
 
   <artifactId>mszip</artifactId>
-  <version>0.1.0</version>
 
   <name>lecousin.net Java framework - compression mszip</name>
   <description>mszip decompression</description>
@@ -17,9 +16,9 @@
 
   <dependencies>
   	<dependency>
-  		<groupId>net.lecousin.compression</groupId>
+  		<groupId>${project.groupId}</groupId>
   		<artifactId>deflate</artifactId>
-  		<version>0.1.0</version>
+  		<version>${project.version}</version>
   	</dependency>
   </dependencies>
   
@@ -86,6 +85,14 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>com.github.hazendaz.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
       </plugin>
     </plugins>
   </build>

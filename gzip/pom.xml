@@ -3,11 +3,10 @@
   <parent>
     <groupId>net.lecousin.compression</groupId>
     <artifactId>parent-pom</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
   </parent>
   
   <artifactId>gzip</artifactId>
-  <version>0.1.0</version>
   
   <name>lecousin.net Java framework - compression gzip</name>
   <description>GZip compression and decompression</description>
@@ -17,7 +16,7 @@
     <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>deflate</artifactId>
-      <version>0.1.0</version>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>net.lecousin</groupId>
@@ -95,6 +94,14 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>com.github.hazendaz.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
       </plugin>
     </plugins>
   </build>

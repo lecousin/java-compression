@@ -20,6 +20,7 @@ import net.lecousin.framework.util.RunnableWithParameter;
  */
 public class GZipWritable extends DeflateWritable {
 
+	/** Constructor. */
 	public GZipWritable(IO.Writable out, byte priority, int level, int maxPendingWrites) {
 		super(out, priority, level, true, maxPendingWrites);
 		writeHeader();
@@ -76,6 +77,7 @@ public class GZipWritable extends DeflateWritable {
 					result.unblockSuccess(write.getResult());
 					return null;
 				}
+				// skip checkstyle: VariableDeclarationUsageDistance
 				int newPos = buffer.position();
 				int limit = buffer.limit();
 				buffer.position(initPos);

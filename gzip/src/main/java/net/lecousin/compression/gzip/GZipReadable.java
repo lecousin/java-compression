@@ -22,6 +22,7 @@ import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.RunnableWithParameter;
 
+/** GZip decompression. */
 public class GZipReadable extends IO.AbstractIO implements IO.Readable {
 
 	/** GZipReadable with a known uncompressed size. */
@@ -45,6 +46,7 @@ public class GZipReadable extends IO.AbstractIO implements IO.Readable {
 		}
 	}
 	
+	/** Constructor. */
 	public GZipReadable(IO.Readable.Buffered input, byte priority) {
 		this.input = input;
 		this.priority = priority;
@@ -150,7 +152,7 @@ public class GZipReadable extends IO.AbstractIO implements IO.Readable {
 					int rem = currentLen - currentPos;
 					System.arraycopy(currentBuffer, currentPos, b, 0, rem);
 					int nb;
-					try { nb = IOUtil.readFully(input, b, rem, 10-rem); }
+					try { nb = IOUtil.readFully(input, b, rem, 10 - rem); }
 					catch (IOException e) {
 						error = e;
 						header.error(e);
@@ -179,7 +181,8 @@ public class GZipReadable extends IO.AbstractIO implements IO.Readable {
 				}
 				b = currentBuffer[currentPos++] & 0xFF;
 				if (b != 8) {
-					error = new IOException("Unsupported compression method " + b + " for GZIP, only method 8 (deflate) is supported");
+					error = new IOException("Unsupported compression method " + b
+						+ " for GZIP, only method 8 (deflate) is supported");
 					header.error(error);
 					return null;
 				}
@@ -295,7 +298,9 @@ public class GZipReadable extends IO.AbstractIO implements IO.Readable {
 		return readAsync(buffer, ondone, false);
 	}
 
-	private AsyncWork<Integer,IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone, boolean isCurrent) {
+	private AsyncWork<Integer,IOException> readAsync(
+		ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone, boolean isCurrent
+	) {
 		if (error != null) {
 			if (ondone != null) ondone.run(new Pair<>(null, error));
 			return new AsyncWork<>(null, error);
@@ -349,7 +354,10 @@ public class GZipReadable extends IO.AbstractIO implements IO.Readable {
 	}
 	
 	private class InflateTask extends Task.Cpu<Void, NoException> {
-		private InflateTask(ByteBuffer buffer, AsyncWork<Integer, IOException> result, RunnableWithParameter<Pair<Integer,IOException>> ondone, boolean setInput) {
+		private InflateTask(
+			ByteBuffer buffer, AsyncWork<Integer, IOException> result,
+			RunnableWithParameter<Pair<Integer,IOException>> ondone, boolean setInput
+		) {
 			super("Uncompressing gzip: " + input.getSourceDescription(), priority);
 			this.buffer = buffer;
 			this.result = result;

@@ -11,18 +11,20 @@ So far only few compression methods are implemented, more will come...
 
 ## Build status
 
+Current version: 0.1.1
+
 Master: ![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=master "Build Status")
 
 Branch 0.1: ![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=0.1 "Build Status")
 
-Modules with current version:
- * deflate 0.1.0
-   [Javadoc](https://www.javadoc.io/doc/net.lecousin.compression/deflate/0.1.0 "Javadoc")
-   [Maven Central Repository](http://search.maven.org/#artifactdetails%7Cnet.lecousin.compression%7Cdeflate%7C0.1.0%7Cjar "Maven")
- * gzip 0.1.0
-   [Javadoc](https://www.javadoc.io/doc/net.lecousin.compression/gzip/0.1.0 "Javadoc")
-   [Maven Central Repository](http://search.maven.org/#artifactdetails%7Cnet.lecousin.compression%7Cgzip%7C0.1.0%7Cjar "Maven")
- * mszip 0.1.0
-   [Javadoc](https://www.javadoc.io/doc/net.lecousin.compression/mszip/0.1.0 "Javadoc")
-   [Maven Central Repository](http://search.maven.org/#artifactdetails%7Cnet.lecousin.compression%7Cmszip%7C0.1.0%7Cjar "Maven")
+Modules:
+ * deflate
+   [Javadoc](https://www.javadoc.io/doc/net.lecousin.compression/deflate/0.1.1 "Javadoc")
+   [Maven Central Repository](http://search.maven.org/#artifactdetails%7Cnet.lecousin.compression%7Cdeflate%7C0.1.1%7Cjar "Maven")
+ * gzip
+   [Javadoc](https://www.javadoc.io/doc/net.lecousin.compression/gzip/0.1.1 "Javadoc")
+   [Maven Central Repository](http://search.maven.org/#artifactdetails%7Cnet.lecousin.compression%7Cgzip%7C0.1.1%7Cjar "Maven")
+ * mszip
+   [Javadoc](https://www.javadoc.io/doc/net.lecousin.compression/mszip/0.1.1 "Javadoc")
+   [Maven Central Repository](http://search.maven.org/#artifactdetails%7Cnet.lecousin.compression%7Cmszip%7C0.1.1%7Cjar "Maven")
    

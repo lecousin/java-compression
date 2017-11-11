@@ -27,30 +27,43 @@ import net.lecousin.framework.util.RunnableWithParameter;
  */
 public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered {
 	
+	/** Interface to implement in order to provide block of compressed data. */
 	public static interface BlockProvider {
-		/** Return the next block of data, or null if this is the end */
+		/** Return the next block of data, or null if this is the end. */
 		AsyncWork<ByteBuffer,IOException> readNextBlock();
+		
+		/** Description. */
 		String getSourceDescription();
+		
+		/** Underlying IO. */
 		IO getWrappedIO();
+		
+		/** Close. */
 		ISynchronizationPoint<IOException> closeAsync();
 	}
 
+	/** MSZipReadable with a known uncompressed size. */
 	public static class SizeKnown extends MSZipReadable implements IO.KnownSize {
+		/** Constructor. */
 		public SizeKnown(BlockProvider input, byte priority, long uncompressedSize) {
 			super(input, priority);
 			this.uncompressedSize = uncompressedSize;
 		}
+		
 		private long uncompressedSize;
+		
 		@Override
 		public AsyncWork<Long, IOException> getSizeAsync() {
 			return new AsyncWork<>(new Long(uncompressedSize), null);
 		}
+		
 		@Override
 		public long getSizeSync() {
 			return uncompressedSize;
 		}
 	}
 	
+	/** Constructor. */
 	public MSZipReadable(BlockProvider input, byte priority) {
 		this.input = input;
 		this.priority = priority;
@@ -60,7 +73,8 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 	
 	private BlockProvider input;
 	private byte priority;
-	private BlockUncompressor uncompress, nextUncompress;
+	private BlockUncompressor uncompress;
+	private BlockUncompressor nextUncompress;
 	private IOException error = null;
 	private boolean eof = false;
 	
@@ -78,13 +92,15 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 		private AsyncWork<Inflater,NoException> getInflater;
 		private AsyncWork<ByteBuffer,IOException> read;
 		private byte[] uncompressed;
-		private int pos = 0, size = 0;
+		private int pos = 0;
+		private int size = 0;
 		private SynchronizationPoint<IOException> dataReady;
 		
 		private class StartUncompress extends Task.Cpu<Void,NoException> {
 			private StartUncompress() {
 				super("Start uncompressing MSZIP block", priority);
 			}
+			
 			@Override
 			public Void run() {
 				if (read.hasError()) {
@@ -113,7 +129,7 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 				synchronized (MSZipReadable.this) {
 					if (BlockUncompressor.this == MSZipReadable.this.uncompress) {
 						// start reading the next block
-						nextUncompress = new BlockUncompressor(blockIndex+1);
+						nextUncompress = new BlockUncompressor(blockIndex + 1);
 					}
 				}
 				Inflater inflater = getInflater.getResult();
