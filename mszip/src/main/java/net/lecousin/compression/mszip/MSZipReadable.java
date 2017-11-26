@@ -240,6 +240,24 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 	}
 	
 	@Override
+	public int readAsync() throws IOException {
+		if (error != null) throw error;
+		// wait for current block to have some data uncompressed
+		if (!uncompress.dataReady.isUnblocked()) return -2;
+		if (uncompress.pos < uncompress.size)
+			return uncompress.uncompressed[uncompress.pos++] & 0xFF;
+		synchronized (this) {
+			// current block is completely read
+			if (nextUncompress == null)
+				return -1;
+			uncompress = nextUncompress;
+			if (!eof)
+				nextUncompress = new BlockUncompressor(uncompress.blockIndex + 1);
+		}
+		return readAsync();
+	}
+	
+	@Override
 	public AsyncWork<Integer, IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
 		if (error != null) {
 			if (ondone != null) ondone.run(new Pair<>(null, error));
