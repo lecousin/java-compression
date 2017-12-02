@@ -299,7 +299,7 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 			});
 			return res;
 		}
-		return IOUtil.readFullyAsynch(this, buffer, ondone);
+		return IOUtil.readFullyAsync(this, buffer, ondone);
 	}
 
 	@Override

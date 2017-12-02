@@ -80,7 +80,7 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 					write.get().listenInline(this);
 					return;
 				}
-				ISynchronizationPoint<IOException> finish = gout.finishAsynch();
+				ISynchronizationPoint<IOException> finish = gout.finishAsync();
 				finish.listenInline(new Runnable() {
 					@Override
 					public void run() {

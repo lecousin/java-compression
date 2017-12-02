@@ -51,7 +51,7 @@ public class DeflateCompressor {
 		ByteBuffer buffer = ByteBuffer.wrap(bufRead);
 		AsyncWork<Integer,IOException> task = input.readAsync(buffer);
 		AsyncWork<Void, Exception> end = new AsyncWork<Void, Exception>();
-		task.listenAsynch(new Compress(input, output, task, bufRead, deflater, limit, priority, end), true);
+		task.listenAsync(new Compress(input, output, task, bufRead, deflater, limit, priority, end), true);
 		return end;
 	}
 	
@@ -129,7 +129,7 @@ public class DeflateCompressor {
 						limit.freeBuffer(writeBuf);
 					// next read
 					AsyncWork<Integer,IOException> task = input.readAsync(ByteBuffer.wrap(readBuf));
-					task.listenAsynch(new Compress(input, output, task, readBuf, deflater, limit, getPriority(), end), true);
+					task.listenAsync(new Compress(input, output, task, readBuf, deflater, limit, getPriority(), end), true);
 				} else {
 					// write compressed data
 					AsyncWork<Integer, IOException> write = null;

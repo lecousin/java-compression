@@ -135,7 +135,7 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 	}
 	
 	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */
-	public ISynchronizationPoint<IOException> finishAsynch() {
+	public ISynchronizationPoint<IOException> finishAsync() {
 		SynchronizationPoint<IOException> result = new SynchronizationPoint<>();
 		Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Finishing zip compression", priority) {
 			@Override

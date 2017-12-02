@@ -104,7 +104,7 @@ public class GZipWritable extends DeflateWritable {
 	}
 
 	@Override
-	public ISynchronizationPoint<IOException> finishAsynch() {
+	public ISynchronizationPoint<IOException> finishAsync() {
 		SynchronizationPoint<IOException> result = new SynchronizationPoint<>();
 		if (writeHeader.hasError()) {
 			result.error(writeHeader.getError());
@@ -113,11 +113,11 @@ public class GZipWritable extends DeflateWritable {
 		if (!writeHeader.isUnblocked()) {
 			writeHeader.listenInline(() -> {
 				if (writeHeader.hasError()) result.error(writeHeader.getError());
-				else finishAsynch().listenInline(result);
+				else finishAsync().listenInline(result);
 			});
 			return result;
 		}
-		ISynchronizationPoint<IOException> finish = super.finishAsynch();
+		ISynchronizationPoint<IOException> finish = super.finishAsync();
 		finish.listenInline(() -> {
 			if (finish.hasError()) result.error(finish.getError());
 			else if (finish.isCancelled()) result.cancel(finish.getCancelEvent());

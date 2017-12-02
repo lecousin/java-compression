@@ -85,7 +85,7 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 			dataReady = new SynchronizationPoint<>();
 			this.blockIndex = blockIndex;
 			uncompressed = new byte[32768];
-			JoinPoint.fromSynchronizationPoints(getInflater, read).listenAsynch(new StartUncompress(), true);
+			JoinPoint.fromSynchronizationPoints(getInflater, read).listenAsync(new StartUncompress(), true);
 		}
 		
 		private int blockIndex;
@@ -265,7 +265,7 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 		}
 		// wait for current block to have some data uncompressed
 		AsyncWork<Integer, IOException> result = new AsyncWork<>();
-		uncompress.dataReady.listenAsynch(new Task.Cpu<Void,NoException>("Read data from MSZip", priority) {
+		uncompress.dataReady.listenAsync(new Task.Cpu<Void,NoException>("Read data from MSZip", priority) {
 			@Override
 			public Void run() {
 				if (error != null) {
@@ -302,7 +302,7 @@ public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered
 	
 	@Override
 	public AsyncWork<Integer, IOException> readFullyAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
-		return IOUtil.readFullyAsynch(this, buffer, ondone);
+		return IOUtil.readFullyAsync(this, buffer, ondone);
 	}
 	
 	@Override
