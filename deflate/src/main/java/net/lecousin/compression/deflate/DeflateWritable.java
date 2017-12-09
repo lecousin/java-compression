@@ -113,7 +113,7 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 			}
 		};
 		task.start();
-		return task.getSynch();
+		return task.getOutput();
 	}
 	
 	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */

@@ -125,7 +125,7 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 			};
 			readTask.ondone(task, false);
 			readTask = task;
-			return task.getSynch();
+			return task.getOutput();
 		}
 		if (!getInflater.getResult().needsInput()) {
 			Task<Integer,IOException> inflate = new Task.Cpu<Integer,IOException>(
@@ -170,7 +170,7 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 			};
 			inflate.start();
 			readTask = inflate;
-			return inflate.getSynch();
+			return inflate.getOutput();
 		}
 		if (getInflater.getResult().finished()) {
 			reachEOF = true;
@@ -228,14 +228,14 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 		};
 		inflate.startOn(read, true);
 		readTask = inflate;
-		return inflate.getSynch();
+		return inflate.getOutput();
 	}
 	
 	@Override
 	public int readSync(ByteBuffer buffer) throws IOException {
 		if (!getInflater.isUnblocked()) getInflater.block(0);
 		if (readTask != null && !readTask.isDone())
-			readTask.getSynch().block(0);
+			readTask.getOutput().block(0);
 		return readBufferSync(buffer);
 	}
 	
@@ -283,7 +283,7 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 		if (!getInflater.isUnblocked()) getInflater.block(0);
 		if (reachEOF) return -1;
 		if (readTask != null && !readTask.isDone())
-			readTask.getSynch().block(0);
+			readTask.getOutput().block(0);
 		return IOUtil.readFully(this, buffer);
 	}
 

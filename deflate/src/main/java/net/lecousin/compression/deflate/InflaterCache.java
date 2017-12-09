@@ -32,13 +32,13 @@ public class InflaterCache implements IMemoryManageable {
 				if (!nw.isEmpty())
 					return new AsyncWork<>(nw.removeFirst(),null);
 			}
-			return new CreateInflater(true).getSynch();
+			return new CreateInflater(true).getOutput();
 		}
 		synchronized (w) {
 			if (!w.isEmpty())
 				return new AsyncWork<>(w.removeFirst(),null);
 		}
-		return new CreateInflater(false).getSynch();
+		return new CreateInflater(false).getOutput();
 	}
 	
 	private static class CreateInflater extends Task.Cpu<Inflater, NoException> {
