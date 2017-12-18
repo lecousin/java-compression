@@ -56,7 +56,7 @@ public class TestGZipWritable extends LCCoreAbstractTest {
 	
 	@Test
 	@SuppressWarnings("resource")
-	public void testCompressAsyncUncompress() throws IOException {
+	public void testCompressAsyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_gzip_writable");
 		tmp.deleteOnExit();
 		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
@@ -99,9 +99,7 @@ public class TestGZipWritable extends LCCoreAbstractTest {
 				});
 			}
 		});
-		done.block(0);
-		if (done.hasError())
-			throw done.getError();
+		done.blockThrow(0);
 	}
 	
 	@SuppressWarnings("resource")

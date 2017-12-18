@@ -37,8 +37,7 @@ public class GZipWritable extends DeflateWritable {
 
 	@Override
 	public int writeSync(ByteBuffer buffer) throws IOException {
-		writeHeader.block(0);
-		if (writeHeader.hasError()) throw writeHeader.getError();
+		writeHeader.blockException(0);
 		int pos = buffer.position();
 		crc.update(buffer);
 		buffer.position(pos);
@@ -94,8 +93,7 @@ public class GZipWritable extends DeflateWritable {
 
 	@Override
 	public void finishSynch() throws IOException {
-		writeHeader.block(0);
-		if (writeHeader.hasError()) throw writeHeader.getError();
+		writeHeader.blockException(0);
 		super.finishSynch();
 		byte[] trailer = new byte[8];
 		DataUtil.writeUnsignedIntegerLittleEndian(trailer, 0, (int)crc.getValue());

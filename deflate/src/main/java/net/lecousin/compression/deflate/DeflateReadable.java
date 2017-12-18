@@ -235,7 +235,7 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 	public int readSync(ByteBuffer buffer) throws IOException {
 		if (!getInflater.isUnblocked()) getInflater.block(0);
 		if (readTask != null && !readTask.isDone())
-			readTask.getOutput().block(0);
+			readTask.getOutput().blockException(0);
 		return readBufferSync(buffer);
 	}
 	
@@ -283,7 +283,7 @@ public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
 		if (!getInflater.isUnblocked()) getInflater.block(0);
 		if (reachEOF) return -1;
 		if (readTask != null && !readTask.isDone())
-			readTask.getOutput().block(0);
+			readTask.getOutput().blockException(0);
 		return IOUtil.readFully(this, buffer);
 	}
 

@@ -78,8 +78,7 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 		byte[] writeBuf = new byte[len];
 		AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
 		if (lastWrite != null) {
-			lastWrite.block(0);
-			if (lastWrite.hasError()) throw lastWrite.getError();
+			lastWrite.blockException(0);
 		}
 		while (!deflater.needsInput()) {
 			int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
@@ -120,8 +119,7 @@ public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
 	public void finishSynch() throws IOException {
 		AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
 		if (lastWrite != null) {
-			lastWrite.block(0);
-			if (lastWrite.hasError()) throw lastWrite.getError();
+			lastWrite.blockException(0);
 		}
 		deflater.finish();
 		if (!deflater.finished()) {
