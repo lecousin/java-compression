@@ -14,6 +14,7 @@ import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
+import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.RunnableWithParameter;
 
@@ -21,7 +22,7 @@ import net.lecousin.framework.util.RunnableWithParameter;
  * Deflate decompression: wrap a Readable to uncompress it.
  * It uses the {@link Inflater} provided by Java.
  */
-public class DeflateReadable extends IO.AbstractIO implements IO.Readable {
+public class DeflateReadable extends ConcurrentCloseable implements IO.Readable {
 	
 	/** DeflateReadable with a known uncompressed size. */
 	public static class SizeKnown extends DeflateReadable implements IO.KnownSize {

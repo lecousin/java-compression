@@ -13,6 +13,7 @@ import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.LimitWriteOperations;
+import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.RunnableWithParameter;
 
@@ -21,7 +22,7 @@ import net.lecousin.framework.util.RunnableWithParameter;
  * One of the method finishSync or finishAsync must be called when no more data needs to be compressed.
  * It uses the {@link Deflater} provided by Java.
  */
-public class DeflateWritable extends IO.AbstractIO implements IO.Writable {
+public class DeflateWritable extends ConcurrentCloseable implements IO.Writable {
 	
 	/** Constructor. */
 	public DeflateWritable(IO.Writable output, byte priority, int level, boolean nowrap, int maxPendingWrite) {

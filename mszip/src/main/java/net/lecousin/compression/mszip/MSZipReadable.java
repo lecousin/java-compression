@@ -15,6 +15,7 @@ import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
+import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.RunnableWithParameter;
 
@@ -25,7 +26,7 @@ import net.lecousin.framework.util.RunnableWithParameter;
  * The MSZip compression cannot be used as an usual compression method, because it relies on <i>blocks</i> but
  * does not allow to detect blocks, so it needs to be encapsulated in a format that delimits blocks of data.
  */
-public class MSZipReadable extends IO.AbstractIO implements IO.Readable.Buffered {
+public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Buffered {
 	
 	/** Interface to implement in order to provide block of compressed data. */
 	public static interface BlockProvider {

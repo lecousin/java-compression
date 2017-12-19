@@ -19,11 +19,12 @@ import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.util.DataUtil;
+import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.RunnableWithParameter;
 
 /** GZip decompression. */
-public class GZipReadable extends IO.AbstractIO implements IO.Readable {
+public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 
 	/** GZipReadable with a known uncompressed size. */
 	public static class SizeKnown extends GZipReadable implements IO.KnownSize {
