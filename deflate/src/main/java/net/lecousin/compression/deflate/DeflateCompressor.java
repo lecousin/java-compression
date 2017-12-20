@@ -68,7 +68,7 @@ public class DeflateCompressor {
 			this.deflater = delfater;
 			this.limit = limit;
 			this.end = end;
-			end.listenCancel(new Listener<CancelException>() {
+			end.onCancel(new Listener<CancelException>() {
 				@Override
 				public void fire(CancelException event) {
 					readTask.unblockCancel(event);

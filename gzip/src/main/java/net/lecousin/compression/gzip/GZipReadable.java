@@ -66,7 +66,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	private IOException error = null;
 	private boolean eof = false;
 	private AsyncWork<Integer,IOException> currentRead = null;
-	private ISynchronizationPoint<IOException> closing = null;
+	private ISynchronizationPoint<Exception> closing = null;
 	
 	@Override
 	public byte getPriority() {
@@ -76,6 +76,31 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	@Override
 	public void setPriority(byte priority) {
 		this.priority = priority;
+	}
+	
+	@Override
+	protected ISynchronizationPoint<?> closeUnderlyingResources() {
+		if (closing != null) return closing;
+		if (!getInflater.isUnblocked()) {
+			SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
+			closing = sp;
+			getInflater.listenInline(() -> {
+				InflaterCache.free(getInflater.getResult(), true);
+				input.closeAsync().listenInline(sp);
+			});
+			return sp;
+		}
+		// do not end, because this closes it definitely and the cache wants to reuse it
+		// getInflater.getResult().end();
+		InflaterCache.free(getInflater.getResult(), true);
+		return closing = input.closeAsync();
+	}
+	
+	@Override
+	protected void closeResources(SynchronizationPoint<Exception> ondone) {
+		input = null;
+		currentBuffer = null;
+		ondone.unblock();
 	}
 	
 	@Override
@@ -310,13 +335,13 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
 			currentRead = res;
 			getInflater.listenInline(() -> { readAsync(buffer, ondone, true).listenInline(res); });
-			return res;
+			return operation(res);
 		}
 		if (!header.isUnblocked()) {
 			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
 			currentRead = res;
 			header.listenInline(() -> { readAsync(buffer, ondone, true).listenInline(res); });
-			return res;
+			return operation(res);
 		}
 		if (eof) {
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
@@ -330,14 +355,14 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 			previous.listenInline(() -> {
 				readAsync(buffer, ondone, true).listenInline(result);
 			});
-			return result;
+			return operation(result);
 		}
 		Inflater inflater = getInflater.getResult();
 		if (!inflater.needsInput()) {
 			AsyncWork<Integer, IOException> result = new AsyncWork<>();
 			InflateTask inflate = new InflateTask(buffer, result, ondone, false);
 			currentRead = result;
-			inflate.start();
+			operation(inflate.start());
 			return result;
 		}
 		AsyncWork<Integer, IOException> result = new AsyncWork<>();
@@ -346,11 +371,11 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 			nextBuffer().listenInline(() -> {
 				readAsync(buffer, ondone, true).listenInline(result);
 			});
-			return result;
+			return operation(result);
 		}
 		InflateTask inflate = new InflateTask(buffer, result, ondone, true);
 		currentRead = result;
-		inflate.start();
+		operation(inflate.start());
 		return result;
 	}
 	
@@ -467,7 +492,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 
 	@Override
 	public AsyncWork<Integer, IOException> readFullyAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
-		return IOUtil.readFullyAsync(this, buffer, ondone);
+		return operation(IOUtil.readFullyAsync(this, buffer, ondone));
 	}
 
 	@Override
@@ -478,25 +503,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 
 	@Override
 	public AsyncWork<Long, IOException> skipAsync(long n, RunnableWithParameter<Pair<Long, IOException>> ondone) {
-		return IOUtil.skipAsyncByReading(this, n, ondone);
-	}
-
-	@Override
-	protected ISynchronizationPoint<IOException> closeIO() {
-		if (closing != null) return closing;
-		if (!getInflater.isUnblocked()) {
-			SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
-			closing = sp;
-			getInflater.listenInline(() -> {
-				InflaterCache.free(getInflater.getResult(), true);
-				input.closeAsync().listenInline(sp);
-			});
-			return sp;
-		}
-		// do not end, because this closes it definitely and the cache wants to reuse it
-		// getInflater.getResult().end();
-		InflaterCache.free(getInflater.getResult(), true);
-		return closing = input.closeAsync();
+		return operation(IOUtil.skipAsyncByReading(this, n, ondone));
 	}
 	
 }

@@ -42,7 +42,7 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 	
 	@SuppressWarnings("resource")
 	@Test
-	public void testCompressSyncUncompress() throws IOException {
+	public void testCompressSyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
 		tmp.deleteOnExit();
 		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
@@ -56,13 +56,13 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 	
 	@Test
 	@SuppressWarnings("resource")
-	public void testCompressAsyncUncompress() throws IOException {
+	public void testCompressAsyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
 		tmp.deleteOnExit();
 		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
 		DeflateWritable gout = new DeflateWritable(fout, Task.PRIORITY_NORMAL, Deflater.BEST_COMPRESSION, false, 3);
 		MutableInteger nb = new MutableInteger(0);
-		SynchronizationPoint<IOException> done = new SynchronizationPoint<>();
+		SynchronizationPoint<Exception> done = new SynchronizationPoint<>();
 		Mutable<AsyncWork<Integer, IOException>> write = new Mutable<>(null);
 		if (nbBuf > 0)
 			write.set(gout.writeAsync(ByteBuffer.wrap(testBuf)));
@@ -92,16 +92,14 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 							fout.close();
 							checkFile(tmp);
 							done.unblock();
-						} catch (IOException e) {
+						} catch (Exception e) {
 							done.error(e);
 						}
 					}
 				});
 			}
 		});
-		done.block(0);
-		if (done.hasError())
-			throw done.getError();
+		done.blockThrow(0);
 	}
 	
 	@SuppressWarnings("resource")

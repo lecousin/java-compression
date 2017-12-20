@@ -57,8 +57,16 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 	public void setPriority(byte priority) { this.priority = priority; }
 	
 	@Override
-	protected ISynchronizationPoint<IOException> closeIO() {
+	protected ISynchronizationPoint<?> closeUnderlyingResources() {
 		return output.closeAsync();
+	}
+	
+	@Override
+	protected void closeResources(SynchronizationPoint<Exception> ondone) {
+		output = null;
+		deflater = null;
+		writeOps = null;
+		ondone.unblock();
 	}
 	
 	@Override
@@ -112,7 +120,7 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 				return Integer.valueOf(len);
 			}
 		};
-		task.start();
+		operation(task.start());
 		return task.getOutput();
 	}
 	
@@ -161,7 +169,7 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 			}
 		};
 		task.start();
-		return result;
+		return operation(result);
 	}
 
 }

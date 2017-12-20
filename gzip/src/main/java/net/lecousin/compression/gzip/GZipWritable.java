@@ -55,12 +55,12 @@ public class GZipWritable extends DeflateWritable {
 			writeHeader.listenInline(() -> {
 				writeAsync(buffer, ondone).listenInline(result);
 			});
-			return result;
+			return operation(result);
 		}
 		int initPos = buffer.position();
 		AsyncWork<Integer, IOException> write = super.writeAsync(buffer, null);
 		AsyncWork<Integer, IOException> result = new AsyncWork<>();
-		new Task.Cpu<Void, NoException>("Update GZip CRC", getPriority()) {
+		operation(new Task.Cpu<Void, NoException>("Update GZip CRC", getPriority()) {
 			@Override
 			public Void run() {
 				if (write.hasError()) {
@@ -87,7 +87,7 @@ public class GZipWritable extends DeflateWritable {
 				result.unblockSuccess(write.getResult());
 				return null;
 			}
-		}.startOn(write, true);
+		}).startOn(write, true);
 		return result;
 	}
 
@@ -113,7 +113,7 @@ public class GZipWritable extends DeflateWritable {
 				if (writeHeader.hasError()) result.error(writeHeader.getError());
 				else finishAsync().listenInline(result);
 			});
-			return result;
+			return operation(result);
 		}
 		ISynchronizationPoint<IOException> finish = super.finishAsync();
 		finish.listenInline(() -> {
@@ -130,7 +130,7 @@ public class GZipWritable extends DeflateWritable {
 				}
 			}.start();
 		});
-		return result;
+		return operation(result);
 	}
 	
 	private void writeHeader() {

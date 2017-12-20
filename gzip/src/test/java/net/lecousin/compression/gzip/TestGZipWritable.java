@@ -42,7 +42,7 @@ public class TestGZipWritable extends LCCoreAbstractTest {
 	
 	@SuppressWarnings("resource")
 	@Test
-	public void testCompressSyncUncompress() throws IOException {
+	public void testCompressSyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_gzip_writable");
 		tmp.deleteOnExit();
 		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
@@ -62,7 +62,7 @@ public class TestGZipWritable extends LCCoreAbstractTest {
 		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
 		GZipWritable gout = new GZipWritable(fout, Task.PRIORITY_NORMAL, Deflater.BEST_COMPRESSION, 3);
 		MutableInteger nb = new MutableInteger(0);
-		SynchronizationPoint<IOException> done = new SynchronizationPoint<>();
+		SynchronizationPoint<Exception> done = new SynchronizationPoint<>();
 		Mutable<AsyncWork<Integer, IOException>> write = new Mutable<>(null);
 		if (nbBuf > 0)
 			write.set(gout.writeAsync(ByteBuffer.wrap(testBuf)));
@@ -92,7 +92,7 @@ public class TestGZipWritable extends LCCoreAbstractTest {
 							fout.close();
 							checkFile(tmp);
 							done.unblock();
-						} catch (IOException e) {
+						} catch (Exception e) {
 							done.error(e);
 						}
 					}

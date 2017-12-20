@@ -60,7 +60,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	private ByteBuffer readBuf = ByteBuffer.allocate(8192);
 	private Task<Integer,IOException> readTask = null;
 	private boolean reachEOF = false;
-	private ISynchronizationPoint<IOException> closing = null;
+	private ISynchronizationPoint<Exception> closing = null;
 
 	@Override
 	public TaskManager getTaskManager() {
@@ -80,10 +80,10 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	public IO getWrappedIO() { return null; }
 
 	@Override
-	protected ISynchronizationPoint<IOException> closeIO() {
+	protected ISynchronizationPoint<?> closeUnderlyingResources() {
 		if (closing != null) return closing;
 		if (!getInflater.isUnblocked()) {
-			SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
+			SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
 			closing = sp;
 			getInflater.listenInline(() -> {
 				InflaterCache.free(getInflater.getResult(), nowrap);
@@ -98,6 +98,14 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	}
 	
 	@Override
+	protected void closeResources(SynchronizationPoint<Exception> ondone) {
+		input = null;
+		readBuf = null;
+		readTask = null;
+		ondone.unblock();
+	}
+	
+	@Override
 	public ISynchronizationPoint<IOException> canStartReading() {
 		SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
 		getInflater.synchWithNoError(sp);
@@ -109,7 +117,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		if (!getInflater.isUnblocked()) {
 			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
 			getInflater.listenInline(() -> { readAsync(buffer, ondone).listenInline(res); });
-			return res;
+			return operation(res);
 		}
 		if (reachEOF) {
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
@@ -125,7 +133,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 				}
 			};
 			readTask.ondone(task, false);
-			readTask = task;
+			readTask = operation(task);
 			return task.getOutput();
 		}
 		if (!getInflater.getResult().needsInput()) {
@@ -170,7 +178,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 				}
 			};
 			inflate.start();
-			readTask = inflate;
+			readTask = operation(inflate);
 			return inflate.getOutput();
 		}
 		if (getInflater.getResult().finished()) {
@@ -228,7 +236,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			}
 		};
 		inflate.startOn(read, true);
-		readTask = inflate;
+		readTask = operation(inflate);
 		return inflate.getOutput();
 	}
 	
@@ -298,9 +306,9 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 					readFullyAsync(buffer, ondone).listenInline(res);
 				}
 			});
-			return res;
+			return operation(res);
 		}
-		return IOUtil.readFullyAsync(this, buffer, ondone);
+		return operation(IOUtil.readFullyAsync(this, buffer, ondone));
 	}
 
 	@Override
@@ -319,9 +327,9 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 					skipAsync(n, ondone).listenInline(res);
 				}
 			});
-			return res;
+			return operation(res);
 		}
-		return IOUtil.skipAsyncByReading(this, n, ondone);
+		return operation(IOUtil.skipAsyncByReading(this, n, ondone));
 	}
 	
 }

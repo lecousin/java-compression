@@ -298,12 +298,12 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 				return null;
 			}
 		}, true);
-		return result;
+		return operation(result);
 	}
 	
 	@Override
 	public AsyncWork<Integer, IOException> readFullyAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
-		return IOUtil.readFullyAsync(this, buffer, ondone);
+		return operation(IOUtil.readFullyAsync(this, buffer, ondone));
 	}
 	
 	@Override
@@ -339,7 +339,7 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 
 	@Override
 	public AsyncWork<Long, IOException> skipAsync(long n, RunnableWithParameter<Pair<Long, IOException>> ondone) {
-		return IOUtil.skipAsyncByReading(this, n, ondone);
+		return operation(IOUtil.skipAsyncByReading(this, n, ondone));
 	}
 
 	@Override
@@ -373,8 +373,14 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 	}
 
 	@Override
-	protected ISynchronizationPoint<IOException> closeIO() {
+	protected ISynchronizationPoint<?> closeUnderlyingResources() {
 		return input.closeAsync();
+	}
+	
+	@Override
+	protected void closeResources(SynchronizationPoint<Exception> ondone) {
+		input = null;
+		ondone.unblock();
 	}
 	
 }
