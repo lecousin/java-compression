@@ -40,7 +40,7 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 		IO getWrappedIO();
 		
 		/** Close. */
-		ISynchronizationPoint<IOException> closeAsync();
+		ISynchronizationPoint<?> closeAsync();
 	}
 
 	/** MSZipReadable with a known uncompressed size. */
