@@ -41,7 +41,7 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 	private int nbBuf;
 	
 	@SuppressWarnings("resource")
-	@Test
+	@Test(timeout=120000)
 	public void testCompressSyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
 		tmp.deleteOnExit();
@@ -54,7 +54,7 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 		checkFile(tmp);
 	}
 	
-	@Test
+	@Test(timeout=120000)
 	@SuppressWarnings("resource")
 	public void testCompressAsyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
