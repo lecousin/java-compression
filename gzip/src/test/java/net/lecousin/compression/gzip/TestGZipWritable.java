@@ -29,7 +29,7 @@ public class TestGZipWritable extends LCCoreAbstractTest {
 
 	@Parameters(name = "nbBuf = {1}")
 	public static Collection<Object[]> parameters() {
-		return TestIO.UsingTestData.generateTestCases();
+		return TestIO.UsingTestData.generateTestCases(false);
 	}
 	
 	public TestGZipWritable(byte[] testBuf, int nbBuf) {
