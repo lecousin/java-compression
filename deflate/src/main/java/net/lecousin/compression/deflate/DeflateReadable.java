@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
+import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
 import net.lecousin.framework.concurrent.Threading;
@@ -74,7 +75,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	public void setPriority(byte priority) { this.priority = priority; }
 
 	@Override
-	public String getSourceDescription() { return "Deflate stream: " + input.getSourceDescription(); }
+	public String getSourceDescription() { return "Deflate stream: " + (input != null ? input.getSourceDescription() : "closed"); }
 
 	@Override
 	public IO getWrappedIO() { return null; }
@@ -114,6 +115,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	
 	@Override
 	public AsyncWork<Integer,IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
+		if (isClosing() || isClosed()) return new AsyncWork<>(null, null, new CancelException("Deflate stream closed"));
 		if (!getInflater.isUnblocked()) {
 			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
 			getInflater.listenInline(() -> { readAsync(buffer, ondone).listenInline(res); });
@@ -158,13 +160,13 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 						do {
 							while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
 								if (total > 0) break;
-				                if (inflater.finished() || inflater.needsDictionary()) {
-				                    reachEOF = true;
-			                    	return Integer.valueOf(-1);
-				                }
-				                if (inflater.needsInput())
+								if (inflater.finished() || inflater.needsDictionary()) {
+									reachEOF = true;
+									return Integer.valueOf(-1);
+								}
+								if (inflater.needsInput())
 									return Integer.valueOf(readBufferSync(buffer));
-				            }
+							}
 							total += n;
 						} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
 						if (!buffer.hasArray())
@@ -193,11 +195,8 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		) {
 			@Override
 			public Integer run() throws IOException {
-				if (!read.isSuccessful())
-					throw read.getError();
 				int len = read.getResult().intValue();
-				if (len <= 0)
-					throw new IOException("Unexpected end of zip input");
+				if (len <= 0) throw new IOException("Unexpected end of zip input");
 				Inflater inflater = getInflater.getResult();
 				inflater.setInput(readBuf.array(), 0, len);
 				byte[] b;
@@ -215,13 +214,13 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 					do {
 						while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
 							if (total > 0) break;
-			                if (inflater.finished() || inflater.needsDictionary()) {
-			                    reachEOF = true;
-		                    	return Integer.valueOf(-1);
-			                }
-			                if (inflater.needsInput())
+							if (inflater.finished() || inflater.needsDictionary()) {
+								reachEOF = true;
+								return Integer.valueOf(-1);
+							}
+							if (inflater.needsInput())
 								return Integer.valueOf(readBufferSync(buffer));
-			            }
+						}
 						total += n;
 					} while (n > 0 && !inflater.needsInput());
 					if (!buffer.hasArray())
@@ -235,7 +234,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 				}
 			}
 		};
-		inflate.startOn(read, true);
+		inflate.startOn(read, false);
 		readTask = operation(inflate);
 		return inflate.getOutput();
 	}
@@ -263,12 +262,12 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		try {
 			int n;
 			while ((n = inflater.inflate(b, off, buffer.remaining())) == 0) {
-                if (inflater.finished() || inflater.needsDictionary()) {
-                    reachEOF = true;
-                    return -1;
-                }
-                if (inflater.needsInput()) fill();
-            }
+				if (inflater.finished() || inflater.needsDictionary()) {
+					reachEOF = true;
+					return -1;
+				}
+				if (inflater.needsInput()) fill();
+			}
 			if (!buffer.hasArray())
 				buffer.put(b, 0, n);
 			else
@@ -300,12 +299,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	public AsyncWork<Integer,IOException> readFullyAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
 		if (!getInflater.isUnblocked()) {
 			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
-			getInflater.listenInline(new Runnable() {
-				@Override
-				public void run() {
-					readFullyAsync(buffer, ondone).listenInline(res);
-				}
-			});
+			getInflater.listenInline(() -> { readFullyAsync(buffer, ondone).listenInline(res); });
 			return operation(res);
 		}
 		return operation(IOUtil.readFullyAsync(this, buffer, ondone));
@@ -321,12 +315,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	public AsyncWork<Long,IOException> skipAsync(long n, RunnableWithParameter<Pair<Long,IOException>> ondone) {
 		if (!getInflater.isUnblocked()) {
 			AsyncWork<Long,IOException> res = new AsyncWork<Long,IOException>();
-			getInflater.listenInline(new Runnable() {
-				@Override
-				public void run() {
-					skipAsync(n, ondone).listenInline(res);
-				}
-			});
+			getInflater.listenInline(() -> { skipAsync(n, ondone).listenInline(res); });
 			return operation(res);
 		}
 		return operation(IOUtil.skipAsyncByReading(this, n, ondone));
