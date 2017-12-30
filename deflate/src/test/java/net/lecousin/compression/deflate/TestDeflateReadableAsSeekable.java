@@ -44,6 +44,7 @@ public class TestDeflateReadableAsSeekable extends TestReadableSeekable {
 			gout.write(buffer, 0, nb);
 			if (nb < buffer.length) break;
 		}
+		gout.flush();
 		gout.close();
 		fout.flush();
 		fout.close();
