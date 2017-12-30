@@ -61,7 +61,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	private ByteBuffer readBuf = ByteBuffer.allocate(8192);
 	private Task<Integer,IOException> readTask = null;
 	private boolean reachEOF = false;
-	private ISynchronizationPoint<Exception> closing = null;
 
 	@Override
 	public TaskManager getTaskManager() {
@@ -82,10 +81,8 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 
 	@Override
 	protected ISynchronizationPoint<?> closeUnderlyingResources() {
-		if (closing != null) return closing;
 		if (!getInflater.isUnblocked()) {
 			SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
-			closing = sp;
 			getInflater.listenInline(() -> {
 				InflaterCache.free(getInflater.getResult(), nowrap);
 				input.closeAsync().listenInline(sp);
@@ -95,7 +92,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		// do not end, because this closes it definitely and the cache wants to reuse it
 		// getInflater.getResult().end();
 		InflaterCache.free(getInflater.getResult(), nowrap);
-		return closing = input.closeAsync();
+		return input.closeAsync();
 	}
 	
 	@Override
@@ -144,39 +141,8 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			) {
 				@Override
 				public Integer run() throws IOException {
-					byte[] b;
-					int off;
-					if (buffer.hasArray()) {
-						b = buffer.array();
-						off = buffer.position();
-					} else {
-						b = new byte[buffer.remaining()];
-						off = 0;
-					}
 					Inflater inflater = getInflater.getResult();
-					try {
-						int n;
-						int total = 0;
-						do {
-							while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
-								if (total > 0) break;
-								if (inflater.finished() || inflater.needsDictionary()) {
-									reachEOF = true;
-									return Integer.valueOf(-1);
-								}
-								if (inflater.needsInput())
-									return Integer.valueOf(readBufferSync(buffer));
-							}
-							total += n;
-						} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
-						if (!buffer.hasArray())
-							buffer.put(b, 0, total);
-						else
-							buffer.position(off + total);
-						return Integer.valueOf(total);
-					} catch (DataFormatException e) {
-						throw new IOException(e);
-					}
+					return readBuffer(buffer, inflater);
 				}
 			};
 			inflate.start();
@@ -194,44 +160,15 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			"Uncompressing zip: " + input.getSourceDescription(), priority, ondone
 		) {
 			@Override
-			public Integer run() throws IOException {
+			public Integer run() throws IOException, CancelException {
 				int len = read.getResult().intValue();
-				if (len <= 0) throw new IOException("Unexpected end of zip input");
+				if (len <= 0) {
+					if (isClosing() || isClosed()) throw new CancelException("Deflate stream closed");
+					throw new IOException("Unexpected end of zip input");
+				}
 				Inflater inflater = getInflater.getResult();
 				inflater.setInput(readBuf.array(), 0, len);
-				byte[] b;
-				int off;
-				if (buffer.hasArray()) {
-					b = buffer.array();
-					off = buffer.position();
-				} else {
-					b = new byte[buffer.remaining()];
-					off = 0;
-				}
-				try {
-					int n;
-					int total = 0;
-					do {
-						while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
-							if (total > 0) break;
-							if (inflater.finished() || inflater.needsDictionary()) {
-								reachEOF = true;
-								return Integer.valueOf(-1);
-							}
-							if (inflater.needsInput())
-								return Integer.valueOf(readBufferSync(buffer));
-						}
-						total += n;
-					} while (n > 0 && !inflater.needsInput());
-					if (!buffer.hasArray())
-						buffer.put(b, 0, total);
-					else
-						buffer.position(off + total);
-					return Integer.valueOf(total);
-				} catch (DataFormatException e) {
-					throw new IOException("Inflate error after " + inflater.getBytesRead()
-						+ " compressed bytes read, and " + inflater.getBytesWritten() + " uncompressed bytes written", e);
-				}
+				return readBuffer(buffer, inflater);
 			}
 		};
 		inflate.startOn(read, false);
@@ -274,8 +211,46 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 				buffer.position(off + n);
 			return n;
 		} catch (DataFormatException e) {
-			throw new IOException(e);
+			throw new IOException("Inflate error after " + inflater.getBytesRead()
+				+ " compressed bytes read, and " + inflater.getBytesWritten() + " uncompressed bytes written", e);
 		}
+	}
+	
+	private Integer readBuffer(ByteBuffer buffer, Inflater inflater) throws IOException {
+		byte[] b;
+		int off;
+		if (buffer.hasArray()) {
+			b = buffer.array();
+			off = buffer.position();
+		} else {
+			b = new byte[buffer.remaining()];
+			off = 0;
+		}
+		try {
+			int n;
+			int total = 0;
+			do {
+				while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
+					if (total > 0) break;
+					if (inflater.finished() || inflater.needsDictionary()) {
+						reachEOF = true;
+						return Integer.valueOf(-1);
+					}
+					if (inflater.needsInput())
+						return Integer.valueOf(readBufferSync(buffer));
+				}
+				total += n;
+			} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
+			if (!buffer.hasArray())
+				buffer.put(b, 0, total);
+			else
+				buffer.position(off + total);
+			return Integer.valueOf(total);
+		} catch (DataFormatException e) {
+			throw new IOException("Inflate error after " + inflater.getBytesRead()
+				+ " compressed bytes read, and " + inflater.getBytesWritten() + " uncompressed bytes written", e);
+		}
+
 	}
 	
 	private void fill() throws IOException {

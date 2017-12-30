@@ -7,6 +7,8 @@ import java.util.zip.Deflater;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
+import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Writable;
@@ -44,13 +46,13 @@ public class DeflateCompressor {
 	private boolean nowrap;
 	
 	/** Compress from a Readable to a Writable. */
-	public AsyncWork<Void, Exception> compress(Readable input, Writable output, int bufferSize, int maxBuffers, byte priority) {
+	public ISynchronizationPoint<Exception> compress(Readable input, Writable output, int bufferSize, int maxBuffers, byte priority) {
 		Deflater deflater = new Deflater(level, nowrap);
 		LimitWriteOperationsReuseBuffers limit = new LimitWriteOperationsReuseBuffers(output, bufferSize, maxBuffers);
 		byte[] bufRead = new byte[bufferSize];
 		ByteBuffer buffer = ByteBuffer.wrap(bufRead);
 		AsyncWork<Integer,IOException> task = input.readAsync(buffer);
-		AsyncWork<Void, Exception> end = new AsyncWork<Void, Exception>();
+		SynchronizationPoint<Exception> end = new SynchronizationPoint<>();
 		task.listenAsync(new Compress(input, output, task, bufRead, deflater, limit, priority, end), true);
 		return end;
 	}
@@ -58,7 +60,7 @@ public class DeflateCompressor {
 	private static class Compress extends Task.Cpu<Void,Exception> {
 		private Compress(
 			Readable input, Writable output, AsyncWork<Integer,IOException> readTask, byte[] readBuf,
-			Deflater delfater, LimitWriteOperationsReuseBuffers limit, byte priority, AsyncWork<Void, Exception> end
+			Deflater delfater, LimitWriteOperationsReuseBuffers limit, byte priority, SynchronizationPoint<Exception> end
 		) {
 			super("Zip compression", priority);
 			this.input = input;
@@ -83,13 +85,13 @@ public class DeflateCompressor {
 		private byte[] readBuf;
 		private Deflater deflater;
 		private LimitWriteOperationsReuseBuffers limit;
-		private AsyncWork<Void, Exception> end;
+		private SynchronizationPoint<Exception> end;
 		
 		@Override
 		public Void run() throws Exception {
 			if (readTask.isCancelled() || end.isCancelled()) return null;
 			if (!readTask.isSuccessful()) {
-				end.unblockError(readTask.getError());
+				end.error(readTask.getError());
 				throw readTask.getError();
 			}
 			try {
@@ -101,15 +103,22 @@ public class DeflateCompressor {
 					// end of data
 					deflater.finish();
 					while (!deflater.finished()) {
+						if (writeBuf == null) writeBuf = limit.getBuffer();
 						nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity() - pos);
 						if (nb <= 0) break;
 						pos += nb;
+						if (pos == writeBuf.capacity()) {
+							writeCompressedData(writeBuf, pos);
+							pos = 0;
+							writeBuf = null;
+						}
 					}
 					deflater.end();
 					deflater = null;
 				} else {
 					deflater.setInput(readBuf, 0, nb);
 					while (!deflater.needsInput() && !end.isCancelled()) {
+						if (writeBuf == null) writeBuf = limit.getBuffer();
 						nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity() - pos);
 						if (nb <= 0) break;
 						pos += nb;
@@ -141,17 +150,17 @@ public class DeflateCompressor {
 						write = limit.getLastPendingOperation();
 					}
 					if (write == null)
-						end.unblockSuccess(null);
+						end.unblock();
 					else
 						write.listenInline(new Runnable() {
 							@Override
 							public void run() {
-								end.unblockSuccess(null);
+								end.unblock();
 							}
 						});
 				}
 			} catch (Exception e) {
-				end.unblockError(e);
+				end.error(e);
 				throw e;
 			}
 			return null;

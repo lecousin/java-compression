@@ -50,7 +50,7 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 		for (int i = 0; i < nbBuf; ++i)
 			gout.writeSync(ByteBuffer.wrap(testBuf));
 		gout.finishSynch();
-		fout.close();
+		gout.close();
 		checkFile(tmp);
 	}
 	
@@ -75,6 +75,10 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 					done.error(write.get().getError());
 					return;
 				}
+				if (write.get().isCancelled()) {
+					done.cancel(write.get().getCancelEvent());
+					return;
+				}
 				if (nb.inc() < nbBuf) {
 					write.set(gout.writeAsync(ByteBuffer.wrap(testBuf)));
 					write.get().listenInline(this);
@@ -86,6 +90,10 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 					public void run() {
 						if (finish.hasError()) {
 							done.error(finish.getError());
+							return;
+						}
+						if (finish.isCancelled()) {
+							done.cancel(finish.getCancelEvent());
 							return;
 						}
 						try {
@@ -100,6 +108,7 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 			}
 		});
 		done.blockThrow(0);
+		gout.close();
 	}
 	
 	@SuppressWarnings("resource")

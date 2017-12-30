@@ -66,7 +66,6 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	private IOException error = null;
 	private boolean eof = false;
 	private AsyncWork<Integer,IOException> currentRead = null;
-	private ISynchronizationPoint<Exception> closing = null;
 	
 	@Override
 	public byte getPriority() {
@@ -80,10 +79,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	
 	@Override
 	protected ISynchronizationPoint<?> closeUnderlyingResources() {
-		if (closing != null) return closing;
 		if (!getInflater.isUnblocked()) {
 			SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
-			closing = sp;
 			getInflater.listenInline(() -> {
 				InflaterCache.free(getInflater.getResult(), true);
 				input.closeAsync().listenInline(sp);
@@ -93,7 +90,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 		// do not end, because this closes it definitely and the cache wants to reuse it
 		// getInflater.getResult().end();
 		InflaterCache.free(getInflater.getResult(), true);
-		return closing = input.closeAsync();
+		return input.closeAsync();
 	}
 	
 	@Override

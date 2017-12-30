@@ -161,6 +161,7 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 						}
 					} while (!deflater.finished());
 				}
+				if (lastWrite == null) lastWrite = writeOps.getLastPendingOperation();
 				if (lastWrite != null)
 					lastWrite.listenInline(result);
 				else
