@@ -219,7 +219,8 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			int n = 0;
 			int total = 0;
 			do {
-				while (!isClosing() && !isClosed() && input != null && (n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
+				while (!isClosing() && !isClosed() && input != null &&
+					(n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
 					if (total > 0) break;
 					if (inflater.finished() || inflater.needsDictionary()) {
 						reachEOF = true;

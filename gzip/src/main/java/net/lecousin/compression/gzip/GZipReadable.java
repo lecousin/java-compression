@@ -361,6 +361,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 			InflateTask inflate = new InflateTask(buffer, result, ondone, false);
 			currentRead = result;
 			operation(inflate.start());
+			if (inflate.isCancelling())
+				result.cancel(inflate.getCancelEvent());
 			return result;
 		}
 		AsyncWork<Integer, IOException> result = new AsyncWork<>();
@@ -374,6 +376,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 		InflateTask inflate = new InflateTask(buffer, result, ondone, true);
 		currentRead = result;
 		operation(inflate.start());
+		if (inflate.isCancelling())
+			result.cancel(inflate.getCancelEvent());
 		return result;
 	}
 	
