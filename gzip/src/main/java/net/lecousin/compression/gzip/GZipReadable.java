@@ -93,10 +93,11 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	protected void closeResources(SynchronizationPoint<Exception> ondone) {
 		input = null;
 		currentBuffer = null;
+		Inflater inflater = getInflater.getResult();
+		getInflater = null;
 		// do not end, because this closes it definitely and the cache wants to reuse it
 		// getInflater.getResult().end();
-		InflaterCache.free(getInflater.getResult(), true);
-		getInflater = null;
+		InflaterCache.free(inflater, true);
 		ondone.unblock();
 	}
 	
@@ -395,6 +396,10 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 
 		@Override
 		public Void run() {
+			if (isClosing() || isClosed() || input == null) {
+				result.cancel(new CancelException("GZip closed"));
+				return null;
+			}
 			Inflater inflater = getInflater.getResult();
 			if (setInput) {
 				inflater.setInput(currentBuffer, currentPos, currentLen - currentPos);
@@ -412,6 +417,10 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				int n;
 				int total = 0;
 				do {
+					if (isClosing() || isClosed() || input == null) {
+						result.cancel(new CancelException("GZip closed"));
+						return null;
+					}
 					n = inflater.inflate(b, off + total, buffer.remaining() - total);
 					if (n > 0) total += n;
 	                if (inflater.finished() || inflater.needsDictionary()) {
@@ -419,6 +428,10 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	                	skipTrailer();
 	                	header = new SynchronizationPoint<>();
 	                	readHeader();
+	        			if (isClosing() || isClosed() || input == null) {
+	        				result.cancel(new CancelException("GZip closed"));
+	        				return null;
+	        			}
 	                	inflater.reset();
 	                	if (total <= 0) {
 	                		// no data read yet
