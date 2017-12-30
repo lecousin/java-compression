@@ -18,9 +18,9 @@ So far only few compression methods are implemented, more will come...
 [![Codecov](https://codecov.io/gh/lecousin/java-compression/graph/badge.svg)](https://codecov.io/gh/lecousin/java-compression/branch/master)
 
 Modules:
- * deflate [![Javadoc](https://img.shields.io/badge/javadoc-0.1.2-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/deflate/0.1.2)
- * gzip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.2-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/gzip/0.1.2)
- * mszip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.2-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/mszip/0.1.2)
+ * deflate [![Javadoc](https://img.shields.io/badge/javadoc-0.1.3-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/deflate/0.1.3)
+ * gzip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.3-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/gzip/0.1.3)
+ * mszip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.3-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/mszip/0.1.3)
 
 ### Next minor release - branch 0.1   
 
