@@ -15,7 +15,7 @@ So far only few compression methods are implemented, more will come...
 
 [![Maven Central](https://img.shields.io/maven-central/v/net.lecousin.compression/parent-pom.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22net.lecousin.compression%22)
 ![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=master "Build Status")
-[![Codecov](https://codecov.io/gh/lecousin/java-framework-compression/graph/badge.svg)](https://codecov.io/gh/lecousin/java-framework-compression/branch/master)
+[![Codecov](https://codecov.io/gh/lecousin/java-compression/graph/badge.svg)](https://codecov.io/gh/lecousin/java-compression/branch/master)
 
 Modules:
  * deflate [![Javadoc](https://img.shields.io/badge/javadoc-0.1.2-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/deflate/0.1.2)
@@ -25,4 +25,4 @@ Modules:
 ### Next minor release - branch 0.1   
 
 ![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=0.1 "Build Status")
-[![Codecov](https://codecov.io/gh/lecousin/java-framework-compression/branch/0.1/graph/badge.svg)](https://codecov.io/gh/lecousin/java-framework-compression/branch/0.1)
+[![Codecov](https://codecov.io/gh/lecousin/java-compression/branch/0.1/graph/badge.svg)](https://codecov.io/gh/lecousin/java-compression/branch/0.1)

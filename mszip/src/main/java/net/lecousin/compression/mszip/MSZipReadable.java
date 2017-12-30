@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.zip.Inflater;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 import net.lecousin.compression.deflate.InflaterCache;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
@@ -102,6 +104,7 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 				super("Start uncompressing MSZIP block", priority);
 			}
 			
+			@SuppressFBWarnings("IS2_INCONSISTENT_SYNC")
 			@Override
 			public Void run() {
 				if (read.hasError()) {
