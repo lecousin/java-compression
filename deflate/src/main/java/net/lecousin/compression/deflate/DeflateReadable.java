@@ -177,7 +177,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		int off;
 		if (buffer.hasArray()) {
 			b = buffer.array();
-			off = buffer.position();
+			off = buffer.arrayOffset() + buffer.position();
 		} else {
 			b = new byte[buffer.remaining()];
 			off = 0;
@@ -195,7 +195,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			if (!buffer.hasArray())
 				buffer.put(b, 0, n);
 			else
-				buffer.position(off + n);
+				buffer.position(off + n - buffer.arrayOffset());
 			return n;
 		} catch (DataFormatException e) {
 			throw new IOException("Inflate error after " + inflater.getBytesRead()
@@ -210,7 +210,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		int off;
 		if (buffer.hasArray()) {
 			b = buffer.array();
-			off = buffer.position();
+			off = buffer.arrayOffset() + buffer.position();
 		} else {
 			b = new byte[buffer.remaining()];
 			off = 0;
@@ -237,7 +237,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			if (!buffer.hasArray())
 				buffer.put(b, 0, total);
 			else
-				buffer.position(off + total);
+				buffer.position(off + total - buffer.arrayOffset());
 			Integer r = Integer.valueOf(total);
 			if (ondone != null) ondone.run(new Pair<>(r, null));
 			result.unblockSuccess(r);

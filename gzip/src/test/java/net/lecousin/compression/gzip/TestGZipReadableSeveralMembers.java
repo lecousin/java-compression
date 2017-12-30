@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.zip.GZIPOutputStream;
 
 import net.lecousin.framework.concurrent.Task;
@@ -35,18 +37,22 @@ public class TestGZipReadableSeveralMembers extends TestReadable {
 		File tmp = File.createTempFile("test", "_" + fileSize + "_gzip");
 		tmp.deleteOnExit();
 		FileOutputStream fout = new FileOutputStream(tmp);
+		List<GZIPOutputStream> gouts = new LinkedList<>();
 		do {
 			GZIPOutputStream gout = new GZIPOutputStream(fout);
+			gouts.add(gout);
 			byte[] buffer = new byte[4096];
 			int nb = file.readFullySync(ByteBuffer.wrap(buffer));
 			if (nb <= 0) break;
 			gout.write(buffer, 0, nb);
+			gout.flush();
 			gout.finish();
 			if (nb < buffer.length) break;
 		} while (true);
 		fout.flush();
 		fout.close();
 		file.closeAsync();
+		for (GZIPOutputStream gout : gouts) try { gout.close(); } catch (Throwable t) {}
 		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.PRIORITY_NORMAL);
 		SimpleBufferedReadable bin = new SimpleBufferedReadable(fin, 8192);
 		GZipReadable.SizeKnown gin = new GZipReadable.SizeKnown(bin, Task.PRIORITY_NORMAL, fileSize);

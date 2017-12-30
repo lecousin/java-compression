@@ -82,14 +82,10 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 		if (!getInflater.isUnblocked()) {
 			SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
 			getInflater.listenInline(() -> {
-				InflaterCache.free(getInflater.getResult(), true);
 				input.closeAsync().listenInline(sp);
 			});
 			return sp;
 		}
-		// do not end, because this closes it definitely and the cache wants to reuse it
-		// getInflater.getResult().end();
-		InflaterCache.free(getInflater.getResult(), true);
 		return input.closeAsync();
 	}
 	
@@ -97,6 +93,10 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	protected void closeResources(SynchronizationPoint<Exception> ondone) {
 		input = null;
 		currentBuffer = null;
+		// do not end, because this closes it definitely and the cache wants to reuse it
+		// getInflater.getResult().end();
+		InflaterCache.free(getInflater.getResult(), true);
+		getInflater = null;
 		ondone.unblock();
 	}
 	
@@ -132,8 +132,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				}
 				if (b.hasArray()) {
 					currentBuffer = b.array();
-					currentPos = b.position();
-					currentLen = b.limit();
+					currentPos = b.arrayOffset() + b.position();
+					currentLen = b.arrayOffset() + b.limit();
 				} else {
 					new Task.Cpu<Void, NoException>("Convert native buffer into java buffer", priority) {
 						@Override
@@ -148,8 +148,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 					}.start();
 					return;
 				}
-				sp.unblock();
 			}
+			sp.unblock();
 		});
 		return sp;
 	}
@@ -403,7 +403,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 			int off;
 			if (buffer.hasArray()) {
 				b = buffer.array();
-				off = buffer.position();
+				off = buffer.arrayOffset() + buffer.position();
 			} else {
 				b = new byte[buffer.remaining()];
 				off = 0;
@@ -440,7 +440,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				if (!buffer.hasArray())
 					buffer.put(b, 0, total);
 				else
-					buffer.position(off + total);
+					buffer.position(off + total - buffer.arrayOffset());
 				Integer r = Integer.valueOf(total);
 				if (ondone != null) ondone.run(new Pair<>(r, null));
 				result.unblockSuccess(r);
