@@ -7,4 +7,6 @@ after_script:
  - cat */target/checkstyle-result.xml
  - echo _____________SOPTBUGS______________
  - cat */target/findbugsXml.xml
- 
+  
+after_success:
+ - bash <(curl -s https://codecov.io/bash)
