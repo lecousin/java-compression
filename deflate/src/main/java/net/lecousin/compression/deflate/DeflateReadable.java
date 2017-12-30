@@ -106,7 +106,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		}
 		if (readTask != null && !readTask.isUnblocked()) {
 			Task<Integer,IOException> task = new Task.Cpu<Integer,IOException>(
-				"Waiting for previous uncompression task", Task.PRIORITY_IMPORTANT, ondone
+				"Waiting for previous uncompression task", priority, ondone
 			) {
 				@Override
 				public Integer run() throws IOException {
@@ -132,11 +132,12 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			readTask = operation(result);
 			return result;
 		}
+		/*
 		if (inflater.finished()) {
 			reachEOF = true;
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
-		}
+		}*/
 		AsyncWork<Integer, IOException> result = new AsyncWork<>();
 		fillAsync(buffer, result, ondone);
 		return readTask = operation(result);
@@ -195,7 +196,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			off = 0;
 		}
 		try {
-			int n = 0;
+			int n;
 			int total = 0;
 			do {
 				while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
