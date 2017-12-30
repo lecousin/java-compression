@@ -257,10 +257,13 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 				int len = read.getResult().intValue();
 				if (len <= 0) {
 					if (isClosing() || isClosed()) result.cancel(new CancelException("Deflate stream closed"));
-					else {
+					else if (!inflater.finished() && !inflater.needsDictionary()) {
 						IOException err = new IOException("Unexpected end of zip input");
 						if (ondone != null) ondone.run(new Pair<>(null, err));
 						result.error(err);
+					} else {
+						if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
+						result.unblockSuccess(Integer.valueOf(-1));
 					}
 					return null;
 				}
