@@ -48,16 +48,14 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	
 	/** Constructor. */
 	public DeflateReadable(IO.Readable input, byte priority, boolean nowrap) {
-		getInflater = InflaterCache.get(nowrap);
+		inflater = new Inflater(nowrap);
 		this.input = input;
 		this.priority = priority;
-		this.nowrap = nowrap;
 	}
 	
 	private IO.Readable input;
 	private byte priority;
-	private boolean nowrap;
-	private AsyncWork<Inflater,NoException> getInflater;
+	private Inflater inflater;
 	private ByteBuffer readBuf = ByteBuffer.allocate(8192);
 	private AsyncWork<Integer, IOException> readTask = null;
 	private boolean reachEOF = false;
@@ -81,13 +79,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 
 	@Override
 	protected ISynchronizationPoint<?> closeUnderlyingResources() {
-		if (!getInflater.isUnblocked()) {
-			SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
-			getInflater.listenInline(() -> {
-				input.closeAsync().listenInline(sp);
-			});
-			return sp;
-		}
 		return input.closeAsync();
 	}
 	
@@ -96,29 +87,19 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		input = null;
 		readBuf = null;
 		readTask = null;
-		Inflater inflater = getInflater.getResult();
-		getInflater = null;
-		// do not end, because this closes it definitely and the cache wants to reuse it
-		// getInflater.getResult().end();
-		InflaterCache.free(inflater, nowrap);
+		inflater.end();
+		inflater = null;
 		ondone.unblock();
 	}
 	
 	@Override
 	public ISynchronizationPoint<IOException> canStartReading() {
-		SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
-		getInflater.synchWithNoError(sp);
-		return sp;
+		return new SynchronizationPoint<>(true);
 	}
 	
 	@Override
 	public AsyncWork<Integer,IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
 		if (isClosing() || isClosed()) return new AsyncWork<>(null, null, new CancelException("Deflate stream closed"));
-		if (!getInflater.isUnblocked()) {
-			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
-			getInflater.listenInline(() -> { readAsync(buffer, ondone).listenInline(res); });
-			return operation(res);
-		}
 		if (reachEOF) {
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
@@ -136,15 +117,14 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			readTask = operation(task).getOutput();
 			return task.getOutput();
 		}
-		if (!getInflater.getResult().needsInput()) {
+		if (!inflater.needsInput()) {
 			AsyncWork<Integer, IOException> result = new AsyncWork<>();
 			Task<Void, NoException> inflate = new Task.Cpu<Void, NoException>(
 				"Uncompressing zip: " + input.getSourceDescription(), priority
 			) {
 				@Override
 				public Void run() {
-					Inflater inflater = getInflater.getResult();
-					readBufferAsync(buffer, ondone, result, inflater);
+					readBufferAsync(buffer, ondone, result);
 					return null;
 				}
 			};
@@ -152,7 +132,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			readTask = operation(result);
 			return result;
 		}
-		if (getInflater.getResult().finished()) {
+		if (inflater.finished()) {
 			reachEOF = true;
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
@@ -164,7 +144,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	
 	@Override
 	public int readSync(ByteBuffer buffer) throws IOException {
-		if (!getInflater.isUnblocked()) getInflater.block(0);
 		if (readTask != null)
 			try { readTask.blockThrow(0); }
 			catch (CancelException cancel) { return -1; }
@@ -185,12 +164,12 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		}
 		try {
 			int n;
-			while ((n = getInflater.getResult().inflate(b, off, buffer.remaining())) == 0) {
-				if (getInflater.getResult().finished() || getInflater.getResult().needsDictionary()) {
+			while ((n = inflater.inflate(b, off, buffer.remaining())) == 0) {
+				if (inflater.finished() || inflater.needsDictionary()) {
 					reachEOF = true;
 					return -1;
 				}
-				if (getInflater.getResult().needsInput()) fillSync();
+				if (inflater.needsInput()) fillSync();
 			}
 			if (!buffer.hasArray())
 				buffer.put(b, 0, n);
@@ -198,13 +177,13 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 				buffer.position(off + n - buffer.arrayOffset());
 			return n;
 		} catch (DataFormatException e) {
-			throw new IOException("Inflate error after " + getInflater.getResult().getBytesRead()
-				+ " compressed bytes read, and " + getInflater.getResult().getBytesWritten() + " uncompressed bytes written", e);
+			throw new IOException("Inflate error after " + inflater.getBytesRead()
+				+ " compressed bytes read, and " + inflater.getBytesWritten() + " uncompressed bytes written", e);
 		}
 	}
 	
 	private void readBufferAsync(
-		ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone, AsyncWork<Integer, IOException> result, Inflater inflater
+		ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone, AsyncWork<Integer, IOException> result
 	) {
 		byte[] b;
 		int off;
@@ -219,8 +198,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			int n = 0;
 			int total = 0;
 			do {
-				while (!isClosing() && !isClosed() && input != null &&
-					(n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
+				while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
 					if (total > 0) break;
 					if (inflater.finished() || inflater.needsDictionary()) {
 						reachEOF = true;
@@ -234,7 +212,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 					}
 				}
 				total += n;
-			} while (n > 0 && total < buffer.remaining() && !inflater.needsInput() && !isClosing() && !isClosed() && input != null);
+			} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
 			if (!buffer.hasArray())
 				buffer.put(b, 0, total);
 			else
@@ -255,7 +233,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		int len = input.readSync(readBuf);
 		if (len <= 0)
 			throw new IOException("Unexpected end of zip input");
-		getInflater.getResult().setInput(readBuf.array(), 0, len);
+		inflater.setInput(readBuf.array(), 0, len);
 	}
 	
 	private void fillAsync(ByteBuffer buffer, AsyncWork<Integer, IOException> result, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
@@ -285,9 +263,8 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 					}
 					return null;
 				}
-				Inflater inflater = getInflater.getResult();
 				inflater.setInput(readBuf.array(), 0, len);
-				readBufferAsync(buffer, ondone, result, inflater);
+				readBufferAsync(buffer, ondone, result);
 				return null;
 			}
 		};
@@ -296,7 +273,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 
 	@Override
 	public int readFullySync(ByteBuffer buffer) throws IOException {
-		if (!getInflater.isUnblocked()) getInflater.block(0);
 		if (reachEOF) return -1;
 		if (readTask != null)
 			try { readTask.blockThrow(0); }
@@ -307,27 +283,16 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 
 	@Override
 	public AsyncWork<Integer,IOException> readFullyAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
-		if (!getInflater.isUnblocked()) {
-			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
-			getInflater.listenInline(() -> { readFullyAsync(buffer, ondone).listenInline(res); });
-			return operation(res);
-		}
 		return operation(IOUtil.readFullyAsync(this, buffer, ondone));
 	}
 
 	@Override
 	public long skipSync(long n) throws IOException {
-		if (!getInflater.isUnblocked()) getInflater.block(0);
 		return IOUtil.skipSyncByReading(this, n);
 	}
 
 	@Override
 	public AsyncWork<Long,IOException> skipAsync(long n, RunnableWithParameter<Pair<Long,IOException>> ondone) {
-		if (!getInflater.isUnblocked()) {
-			AsyncWork<Long,IOException> res = new AsyncWork<Long,IOException>();
-			getInflater.listenInline(() -> { skipAsync(n, ondone).listenInline(res); });
-			return operation(res);
-		}
 		return operation(IOUtil.skipAsyncByReading(this, n, ondone));
 	}
 	

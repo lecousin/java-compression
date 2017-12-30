@@ -6,13 +6,11 @@ import java.util.zip.Inflater;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
-import net.lecousin.compression.deflate.InflaterCache;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
 import net.lecousin.framework.concurrent.Threading;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.JoinPoint;
 import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
@@ -83,16 +81,16 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 	
 	private class BlockUncompressor {
 		public BlockUncompressor(int blockIndex) {
-			getInflater = InflaterCache.get(true);
+			inflater = new Inflater(true);
 			read = input.readNextBlock();
 			dataReady = new SynchronizationPoint<>();
 			this.blockIndex = blockIndex;
 			uncompressed = new byte[32768];
-			JoinPoint.fromSynchronizationPoints(getInflater, read).listenAsync(new StartUncompress(), true);
+			read.listenAsync(new StartUncompress(), true);
 		}
 		
 		private int blockIndex;
-		private AsyncWork<Inflater,NoException> getInflater;
+		private Inflater inflater;
 		private AsyncWork<ByteBuffer,IOException> read;
 		private byte[] uncompressed;
 		private int pos = 0;
@@ -136,19 +134,20 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 						nextUncompress = new BlockUncompressor(blockIndex + 1);
 					}
 				}
-				Inflater inflater = getInflater.getResult();
 				inflater.setInput(compressed, 2, nb - 2);
 				int n;
 				try {
 					do {
 						while ((n = inflater.inflate(uncompressed, size, 32768 - size)) == 0) {
 							if (inflater.finished() || inflater.needsDictionary()) {
-								InflaterCache.free(inflater, true);
+								inflater.end();
+								inflater = null;
 								dataReady.unblock();
 								return null;
 							}
 							if (inflater.needsInput()) {
-								InflaterCache.free(inflater, true);
+								inflater.end();
+								inflater = null;
 								error = new IOException("Truncated MSZIP data");
 								dataReady.unblock();
 								return null;
@@ -158,7 +157,8 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 					} while (true);
 				} catch (Throwable t) {
 					error = new IOException("Invalid deflated data in MSZip block " + blockIndex, t);
-					InflaterCache.free(inflater, true);
+					inflater.end();
+					inflater = null;
 					dataReady.unblock();
 					return null;
 				}

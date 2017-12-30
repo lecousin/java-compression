@@ -6,14 +6,12 @@ import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
-import net.lecousin.compression.deflate.InflaterCache;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
 import net.lecousin.framework.concurrent.Threading;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.JoinPoint;
 import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
@@ -53,12 +51,12 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 		this.priority = priority;
 		header = new SynchronizationPoint<>();
 		readHeader();
-		getInflater = InflaterCache.get(true);
+		inflater = new Inflater(true);
 	}
 	
 	private IO.Readable.Buffered input;
 	private byte priority;
-	private AsyncWork<Inflater,NoException> getInflater;
+	private Inflater inflater;
 	private SynchronizationPoint<IOException> header;
 	private byte[] currentBuffer = null;
 	private int currentPos = 0;
@@ -79,13 +77,6 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	
 	@Override
 	protected ISynchronizationPoint<?> closeUnderlyingResources() {
-		if (!getInflater.isUnblocked()) {
-			SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
-			getInflater.listenInline(() -> {
-				input.closeAsync().listenInline(sp);
-			});
-			return sp;
-		}
 		return input.closeAsync();
 	}
 	
@@ -93,26 +84,14 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	protected void closeResources(SynchronizationPoint<Exception> ondone) {
 		input = null;
 		currentBuffer = null;
-		Inflater inflater = getInflater.getResult();
-		getInflater = null;
-		// do not end, because this closes it definitely and the cache wants to reuse it
-		// getInflater.getResult().end();
-		InflaterCache.free(inflater, true);
+		inflater.end();
+		inflater = null;
 		ondone.unblock();
 	}
 	
 	@Override
 	public ISynchronizationPoint<IOException> canStartReading() {
-		if (getInflater.isUnblocked() && header.isUnblocked())
-			return header;
-		SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
-		JoinPoint.fromSynchronizationPoints(getInflater, header).listenInline(() -> {
-			if (error != null)
-				sp.error(error);
-			else
-				sp.unblock();
-		});
-		return sp;
+		return header;
 	}
 	
 	private SynchronizationPoint<NoException> nextBuffer() {
@@ -329,12 +308,6 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 			if (ondone != null) ondone.run(new Pair<>(null, error));
 			return new AsyncWork<>(null, error);
 		}
-		if (!getInflater.isUnblocked()) {
-			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
-			currentRead = res;
-			getInflater.listenInline(() -> { readAsync(buffer, ondone, true).listenInline(res); });
-			return operation(res);
-		}
 		if (!header.isUnblocked()) {
 			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
 			currentRead = res;
@@ -355,7 +328,6 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 			});
 			return operation(result);
 		}
-		Inflater inflater = getInflater.getResult();
 		if (!inflater.needsInput()) {
 			AsyncWork<Integer, IOException> result = new AsyncWork<>();
 			InflateTask inflate = new InflateTask(buffer, result, ondone, false);
@@ -404,10 +376,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				result.cancel(new CancelException("GZip closed"));
 				return null;
 			}
-			Inflater inflater = getInflater.getResult();
-			if (setInput) {
+			if (setInput)
 				inflater.setInput(currentBuffer, currentPos, currentLen - currentPos);
-			}
 			byte[] b;
 			int off;
 			if (buffer.hasArray()) {
@@ -432,10 +402,6 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	                	skipTrailer();
 	                	header = new SynchronizationPoint<>();
 	                	readHeader();
-	        			if (isClosing() || isClosed() || input == null) {
-	        				result.cancel(new CancelException("GZip closed"));
-	        				return null;
-	        			}
 	                	inflater.reset();
 	                	if (total <= 0) {
 	                		// no data read yet
