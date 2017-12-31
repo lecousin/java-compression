@@ -56,7 +56,7 @@ public class ReadableToSeekable extends ConcurrentCloseable implements IO.Readab
 		file.deleteOnExit();
 		@SuppressWarnings("resource")
 		FileIO.ReadWrite fio = new FileIO.ReadWrite(file, io.getPriority());
-		buffered = new BufferedIO.ReadWrite(fio, 512, bufferSize, 0L, false);
+		buffered = new BufferedIO.ReadWrite(fio, 512, bufferSize, 0L, true);
 		readNextBuffer();
 	}
 	
