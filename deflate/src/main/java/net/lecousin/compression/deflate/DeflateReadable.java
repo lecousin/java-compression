@@ -31,8 +31,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		public SizeKnown(IO.Readable input, byte priority, long uncompressedSize, boolean nowrap) {
 			super(input, priority, nowrap);
 			this.uncompressedSize = uncompressedSize;
-			System.out.println("=================== Deflate of " + uncompressedSize + " =============================");
-			new Exception("from").printStackTrace(System.out);
 		}
 
 		private long uncompressedSize;
@@ -103,12 +101,10 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	public AsyncWork<Integer,IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
 		if (isClosing() || isClosed()) return new AsyncWork<>(null, null, new CancelException("Deflate stream closed"));
 		if (reachEOF) {
-			System.out.println("readAsync: " + buffer.remaining() + " asked but reachEOF = true");
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
 		}
 		if (readTask != null && !readTask.isUnblocked()) {
-			System.out.println("readAsync: wait for previous task");
 			Task<Integer,IOException> task = new Task.Cpu<Integer,IOException>(
 				"Waiting for previous uncompression task", priority, ondone
 			) {
@@ -137,7 +133,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			return result;
 		}
 		if (inflater.finished()) {
-			System.out.println("readAsync: inflater finished, requested = " + buffer.remaining());
 			reachEOF = true;
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
@@ -171,13 +166,11 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			int n;
 			while ((n = inflater.inflate(b, off, buffer.remaining())) == 0) {
 				if (inflater.finished() || inflater.needsDictionary()) {
-					System.out.println("readBufferSync: reachEOF after " + inflater.getBytesWritten());
 					reachEOF = true;
 					return -1;
 				}
 				if (inflater.needsInput()) fillSync();
 			}
-			System.out.println("readBufferSync: requested = " + buffer.remaining() + ", returned = " + n);
 			if (!buffer.hasArray())
 				buffer.put(b, 0, n);
 			else
@@ -206,10 +199,8 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			int total = 0;
 			do {
 				while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
-					System.out.println("readBufferAsync: n = 0");
 					if (total > 0) break;
 					if (inflater.finished() || inflater.needsDictionary()) {
-						System.out.println("readBufferAsync: n = 0, reachEOF");
 						reachEOF = true;
 						if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 						result.unblockSuccess(Integer.valueOf(-1));
@@ -220,10 +211,8 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 						return;
 					}
 				}
-				System.out.println("readBufferAsync: n = " + n);
 				total += n;
 			} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
-			System.out.println("readBufferAsync: requested = " + buffer.remaining() + ", returned = " + total);
 			if (!buffer.hasArray())
 				buffer.put(b, 0, total);
 			else
@@ -242,7 +231,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	private void fillSync() throws IOException {
 		readBuf.clear();
 		int len = input.readSync(readBuf);
-		System.out.println("fillSync: read = " + len);
 		if (len <= 0)
 			throw new IOException("Unexpected end of zip input");
 		inflater.setInput(readBuf.array(), 0, len);
@@ -266,7 +254,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 					return null;
 				}
 				int len = read.getResult().intValue();
-				System.out.println("fillAsync: read = " + len);
 				if (len <= 0) {
 					if (isClosing() || isClosed()) result.cancel(new CancelException("Deflate stream closed"));
 					else {
