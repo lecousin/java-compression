@@ -11,7 +11,7 @@ import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.core.test.io.TestReadableSeekable;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.io.IO;
-//import net.lecousin.framework.io.buffering.ReadableToSeekable;
+import net.lecousin.framework.io.buffering.ReadableToSeekable;
 import net.lecousin.framework.io.buffering.SimpleBufferedReadable;
 
 import org.junit.runner.RunWith;
