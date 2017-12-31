@@ -32,6 +32,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			super(input, priority, nowrap);
 			this.uncompressedSize = uncompressedSize;
 			System.out.println("=================== Deflate of " + uncompressedSize + " =============================");
+			new Exception("from").printStackTrace(System.out);
 		}
 
 		private long uncompressedSize;
@@ -121,7 +122,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			return task.getOutput();
 		}
 		if (!inflater.needsInput()) {
-			System.out.println("readAsync: deflate now, requested = " + buffer.remaining());
 			AsyncWork<Integer, IOException> result = new AsyncWork<>();
 			Task<Void, NoException> inflate = new Task.Cpu<Void, NoException>(
 				"Uncompressing zip: " + input.getSourceDescription(), priority
@@ -142,7 +142,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
 		}
-		System.out.println("readAsync: fill");
 		AsyncWork<Integer, IOException> result = new AsyncWork<>();
 		fillAsync(buffer, result, ondone);
 		return readTask = operation(result);
@@ -158,7 +157,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	}
 	
 	private int readBufferSync(ByteBuffer buffer) throws IOException {
-		System.out.println("readBufferSync: requested = " + buffer.remaining());
 		if (reachEOF) return -1;
 		byte[] b;
 		int off;
@@ -194,7 +192,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	private void readBufferAsync(
 		ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone, AsyncWork<Integer, IOException> result
 	) {
-		System.out.println("readBufferAsync: requested = " + buffer.remaining());
 		byte[] b;
 		int off;
 		if (buffer.hasArray()) {
@@ -252,7 +249,6 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	}
 	
 	private void fillAsync(ByteBuffer buffer, AsyncWork<Integer, IOException> result, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
-		System.out.println("fillAsync: requested = " + buffer.remaining());
 		readBuf.clear();
 		AsyncWork<Integer, IOException> read = input.readAsync(readBuf);
 		Task<Void, NoException> inflate = new Task.Cpu<Void, NoException>(
