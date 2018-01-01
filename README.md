@@ -15,6 +15,7 @@ So far only few compression methods are implemented, more will come...
 
 [![Maven Central](https://img.shields.io/maven-central/v/net.lecousin.compression/parent-pom.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22net.lecousin.compression%22)
 ![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=master "Build Status")
+![build status](https://ci.appveyor.com/api/projects/status/github/lecousin/java-compression?branch=master&svg=true "Build Status")
 [![Codecov](https://codecov.io/gh/lecousin/java-compression/graph/badge.svg)](https://codecov.io/gh/lecousin/java-compression/branch/master)
 
 Modules:
@@ -25,4 +26,5 @@ Modules:
 ### Next minor release - branch 0.1   
 
 ![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=0.1 "Build Status")
+![build status](https://ci.appveyor.com/api/projects/status/github/lecousin/java-compression?branch=0.1&svg=true "Build Status")
 [![Codecov](https://codecov.io/gh/lecousin/java-compression/branch/0.1/graph/badge.svg)](https://codecov.io/gh/lecousin/java-compression/branch/0.1)
