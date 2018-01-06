@@ -123,7 +123,8 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 				}
 				byte[] compressed = comp.array();
 				int nb = comp.remaining();
-				if (compressed[0] != 'C' || compressed[1] != 'K') {
+				int pos = comp.arrayOffset() + comp.position();
+				if (compressed[pos] != 'C' || compressed[pos + 1] != 'K') {
 					error = new IOException("Invalid MSZIP: no CK signature in block " + blockIndex);
 					dataReady.unblock();
 					return null;
@@ -134,7 +135,7 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 						nextUncompress = new BlockUncompressor(blockIndex + 1);
 					}
 				}
-				inflater.setInput(compressed, 2, nb - 2);
+				inflater.setInput(compressed, pos + 2, nb - 2);
 				int n;
 				try {
 					do {

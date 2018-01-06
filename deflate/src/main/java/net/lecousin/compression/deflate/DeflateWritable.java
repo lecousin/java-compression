@@ -77,14 +77,15 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 	@Override
 	public int writeSync(ByteBuffer buffer) throws IOException {
 		int len = buffer.remaining();
-		if (buffer.hasArray())
-			deflater.setInput(buffer.array(), buffer.position(), buffer.remaining());
-		else {
+		if (buffer.hasArray()) {
+			deflater.setInput(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+			buffer.position(buffer.position() + buffer.remaining());
+		} else {
 			byte[] buf = new byte[buffer.remaining()];
 			buffer.get(buf);
 			deflater.setInput(buf);
 		}
-		byte[] writeBuf = new byte[len];
+		byte[] writeBuf = new byte[len > 128 * 1024 ? 128 * 1024 : len];
 		AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
 		if (lastWrite != null) {
 			lastWrite.blockException(0);
@@ -104,9 +105,10 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 			public Integer run() throws IOException {
 				if (isCancelled()) return Integer.valueOf(0);
 				int len = buffer.remaining();
-				if (buffer.hasArray())
-					deflater.setInput(buffer.array(), buffer.position(), buffer.remaining());
-				else {
+				if (buffer.hasArray()) {
+					deflater.setInput(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+					buffer.position(buffer.position() + buffer.remaining());
+				} else {
 					byte[] buf = new byte[buffer.remaining()];
 					buffer.get(buf);
 					deflater.setInput(buf);
@@ -132,7 +134,7 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 		}
 		deflater.finish();
 		if (!deflater.finished()) {
-			byte[] writeBuf = new byte[1024];
+			byte[] writeBuf = new byte[8192];
 			do {
 				int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
 				if (nb <= 0) break;
@@ -151,7 +153,7 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 				deflater.finish();
 				if (!deflater.finished()) {
 					do {
-						byte[] writeBuf = new byte[1024];
+						byte[] writeBuf = new byte[8192];
 						int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
 						if (nb <= 0) break;
 						try { lastWrite = writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb)); }

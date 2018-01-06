@@ -20,6 +20,7 @@ import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.RunnableWithParameter;
+import net.lecousin.framework.util.StringUtil;
 
 /** GZip decompression. */
 public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
@@ -172,13 +173,13 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				}
 				int b = currentBuffer[currentPos++] & 0xFF;
 				if (b != 0x1F) {
-					error = new IOException("Invalid GZIP header: first byte must be 1F");
+					error = new IOException("Invalid GZIP header: first byte must be 1F, found is " + StringUtil.encodeHexa((byte)b));
 					header.error(error);
 					return null;
 				}
 				b = currentBuffer[currentPos++] & 0xFF;
 				if (b != 0x8B) {
-					error = new IOException("Invalid GZIP header: second byte must be 8B");
+					error = new IOException("Invalid GZIP header: second byte must be 8B, found is " + StringUtil.encodeHexa((byte)b));
 					header.error(error);
 					return null;
 				}
@@ -429,7 +430,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				result.unblockSuccess(r);
 				return null;
 			} catch (DataFormatException e) {
-				error = new IOException("Invalid compressed data", e);
+				error = new IOException("Invalid compressed data after " + inflater.getBytesRead() + " bytes (" + inflater.getBytesWritten() + " uncompressed)", e);
 				if (ondone != null) ondone.run(new Pair<>(null, error));
 				result.error(error);
 			}
