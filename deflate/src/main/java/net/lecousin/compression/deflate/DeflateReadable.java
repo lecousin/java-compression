@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
+import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
@@ -101,6 +102,8 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	public AsyncWork<Integer,IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
 		if (isClosing() || isClosed()) return new AsyncWork<>(null, null, new CancelException("Deflate stream closed"));
 		if (reachEOF) {
+			// TODO
+			LCCore.getApplication().getDefaultLogger().debug("readAsync called with reachEOF = true");
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
 		}
@@ -133,6 +136,10 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			return result;
 		}
 		if (inflater.finished()) {
+			// TODO
+			long size = -1;
+			if (this instanceof IO.KnownSize) try { size = ((IO.KnownSize)this).getSizeSync(); } catch (Throwable t) {}
+			LCCore.getApplication().getDefaultLogger().debug("readAsync called, inflater finished with uncompressed bytes " + inflater.getBytesWritten() + " / " + size);
 			reachEOF = true;
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
@@ -152,7 +159,13 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 	}
 	
 	private int readBufferSync(ByteBuffer buffer) throws IOException {
-		if (reachEOF) return -1;
+		if (reachEOF) {
+			// TODO
+			long size = -1;
+			if (this instanceof IO.KnownSize) try { size = ((IO.KnownSize)this).getSizeSync(); } catch (Throwable t) {}
+			LCCore.getApplication().getDefaultLogger().debug("readBufferSync called, inflater finished with uncompressed bytes " + inflater.getBytesWritten() + " / " + size);
+			return -1;
+		}
 		byte[] b;
 		int off;
 		if (buffer.hasArray()) {
@@ -167,6 +180,10 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 			while ((n = inflater.inflate(b, off, buffer.remaining())) == 0) {
 				if (inflater.finished() || inflater.needsDictionary()) {
 					reachEOF = true;
+					// TODO
+					long size = -1;
+					if (this instanceof IO.KnownSize) try { size = ((IO.KnownSize)this).getSizeSync(); } catch (Throwable t) {}
+					LCCore.getApplication().getDefaultLogger().debug("readBufferSync called, inflater finished = " + inflater.finished() + " needsDictionary = " + inflater.needsDictionary() + ", with uncompressed bytes " + inflater.getBytesWritten() + " / " + size);
 					return -1;
 				}
 				if (inflater.needsInput()) fillSync();
@@ -202,6 +219,10 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 					if (total > 0) break;
 					if (inflater.finished() || inflater.needsDictionary()) {
 						reachEOF = true;
+						// TODO
+						long size = -1;
+						if (this instanceof IO.KnownSize) try { size = ((IO.KnownSize)this).getSizeSync(); } catch (Throwable t) {}
+						LCCore.getApplication().getDefaultLogger().debug("readBufferAsync called, inflater finished = " + inflater.finished() + " needsDictionary = " + inflater.needsDictionary() + ", with uncompressed bytes " + inflater.getBytesWritten() + " / " + size);
 						if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 						result.unblockSuccess(Integer.valueOf(-1));
 						return;
@@ -273,7 +294,13 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 
 	@Override
 	public int readFullySync(ByteBuffer buffer) throws IOException {
-		if (reachEOF) return -1;
+		if (reachEOF) {
+			// TODO
+			long size = -1;
+			if (this instanceof IO.KnownSize) try { size = ((IO.KnownSize)this).getSizeSync(); } catch (Throwable t) {}
+			LCCore.getApplication().getDefaultLogger().debug("readFullySync called, inflater finished with uncompressed bytes " + inflater.getBytesWritten() + " / " + size);
+			return -1;
+		}
 		if (readTask != null)
 			try { readTask.blockThrow(0); }
 			catch (CancelException e) { return -1; }
