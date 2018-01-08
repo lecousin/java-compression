@@ -138,7 +138,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		if (inflater.finished()) {
 			// TODO
 			long size = -1;
-			if (this instanceof IO.KnownSize) try { size = ((IO.KnownSize)this).getSizeSync(); } catch (Throwable t) {}
+			if (DeflateReadable.this instanceof IO.KnownSize) try { size = ((IO.KnownSize)DeflateReadable.this).getSizeSync(); } catch (Throwable t) {}
 			LCCore.getApplication().getDefaultLogger().debug("readAsync called, inflater finished with uncompressed bytes " + inflater.getBytesWritten() + " / " + size);
 			reachEOF = true;
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
@@ -162,7 +162,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		if (reachEOF) {
 			// TODO
 			long size = -1;
-			if (this instanceof IO.KnownSize) try { size = ((IO.KnownSize)this).getSizeSync(); } catch (Throwable t) {}
+			if (DeflateReadable.this instanceof IO.KnownSize) try { size = ((IO.KnownSize)DeflateReadable.this).getSizeSync(); } catch (Throwable t) {}
 			LCCore.getApplication().getDefaultLogger().debug("readBufferSync called, inflater finished with uncompressed bytes " + inflater.getBytesWritten() + " / " + size);
 			return -1;
 		}
@@ -182,7 +182,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 					reachEOF = true;
 					// TODO
 					long size = -1;
-					if (this instanceof IO.KnownSize) try { size = ((IO.KnownSize)this).getSizeSync(); } catch (Throwable t) {}
+					if (DeflateReadable.this instanceof IO.KnownSize) try { size = ((IO.KnownSize)DeflateReadable.this).getSizeSync(); } catch (Throwable t) {}
 					LCCore.getApplication().getDefaultLogger().debug("readBufferSync called, inflater finished = " + inflater.finished() + " needsDictionary = " + inflater.needsDictionary() + ", with uncompressed bytes " + inflater.getBytesWritten() + " / " + size);
 					return -1;
 				}
@@ -221,7 +221,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 						reachEOF = true;
 						// TODO
 						long size = -1;
-						if (this instanceof IO.KnownSize) try { size = ((IO.KnownSize)this).getSizeSync(); } catch (Throwable t) {}
+						if (DeflateReadable.this instanceof IO.KnownSize) try { size = ((IO.KnownSize)DeflateReadable.this).getSizeSync(); } catch (Throwable t) {}
 						LCCore.getApplication().getDefaultLogger().debug("readBufferAsync called, inflater finished = " + inflater.finished() + " needsDictionary = " + inflater.needsDictionary() + ", with uncompressed bytes " + inflater.getBytesWritten() + " / " + size);
 						if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 						result.unblockSuccess(Integer.valueOf(-1));
@@ -297,7 +297,7 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		if (reachEOF) {
 			// TODO
 			long size = -1;
-			if (this instanceof IO.KnownSize) try { size = ((IO.KnownSize)this).getSizeSync(); } catch (Throwable t) {}
+			if (DeflateReadable.this instanceof IO.KnownSize) try { size = ((IO.KnownSize)DeflateReadable.this).getSizeSync(); } catch (Throwable t) {}
 			LCCore.getApplication().getDefaultLogger().debug("readFullySync called, inflater finished with uncompressed bytes " + inflater.getBytesWritten() + " / " + size);
 			return -1;
 		}
