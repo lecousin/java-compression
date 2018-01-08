@@ -394,8 +394,10 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				result.cancel(new CancelException("GZip closed"));
 				return null;
 			}
-			if (setInput)
+			if (setInput) {
 				inflater.setInput(currentBuffer, currentPos, currentLen - currentPos);
+				currentPos = currentLen;
+			}
 			byte[] b;
 			int off;
 			if (buffer.hasArray()) {
@@ -432,13 +434,11 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	                	break;
 	                }
 	                if (inflater.needsInput()) {
-	                	currentPos = currentLen;
 		                if (total > 0) break; // some data read
 	                	readAsync(buffer, ondone, true).listenInline(result);
 	                	return null;
 	                }
 				} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
-				if (inflater.needsInput()) currentPos = currentLen;
 				if (!buffer.hasArray())
 					buffer.put(b, 0, total);
 				else
