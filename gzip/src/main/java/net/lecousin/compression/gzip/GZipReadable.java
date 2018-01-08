@@ -6,7 +6,6 @@ import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
-import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
@@ -54,8 +53,6 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 		header = new SynchronizationPoint<>();
 		readHeader();
 		inflater = new Inflater(true);
-		// TODO
-		LCCore.getApplication().getDefaultLogger().debug("NEW GZIPREADABLE", new Exception("============================================="));
 	}
 	
 	private IO.Readable.Buffered input;
@@ -111,18 +108,6 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 					currentBuffer = null;
 					currentPos = 0;
 					currentLen = 0;
-					// TODO
-					long size = -1;
-					if (GZipReadable.this instanceof IO.KnownSize) try { size = ((IO.KnownSize)GZipReadable.this).getSizeSync(); } catch (Throwable t) {}
-					LCCore.getApplication().getDefaultLogger().debug(
-						"Reach end of gzip file, inflater status is: " +
-							"read = " + inflater.getBytesRead() +
-							"write = " + inflater.getBytesWritten() +
-							"finished = " + inflater.finished() +
-							"needsDisctionary = " + inflater.needsDictionary() +
-							"needsInput = " + inflater.needsInput() +
-							" // our size is " + size
-					);
 					sp.unblock();
 					return;
 				}
@@ -188,13 +173,15 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				}
 				int b = currentBuffer[currentPos++] & 0xFF;
 				if (b != 0x1F) {
-					error = new IOException("Invalid GZIP header: first byte must be 1F, found is " + StringUtil.encodeHexa((byte)b));
+					error = new IOException("Invalid GZIP header: first byte must be 1F, found is "
+						+ StringUtil.encodeHexa((byte)b));
 					header.error(error);
 					return null;
 				}
 				b = currentBuffer[currentPos++] & 0xFF;
 				if (b != 0x8B) {
-					error = new IOException("Invalid GZIP header: second byte must be 8B, found is " + StringUtil.encodeHexa((byte)b));
+					error = new IOException("Invalid GZIP header: second byte must be 8B, found is "
+						+ StringUtil.encodeHexa((byte)b));
 					header.error(error);
 					return null;
 				}
@@ -331,8 +318,6 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 			return operation(res);
 		}
 		if (eof) {
-			// TODO
-			LCCore.getApplication().getDefaultLogger().debug("readAsync called with eof = true");
 			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
 			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
 		}
@@ -448,7 +433,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				result.unblockSuccess(r);
 				return null;
 			} catch (DataFormatException e) {
-				error = new IOException("Invalid compressed data after " + inflater.getBytesRead() + " bytes (" + inflater.getBytesWritten() + " uncompressed)", e);
+				error = new IOException("Invalid compressed data after " + inflater.getBytesRead()
+					+ " bytes (" + inflater.getBytesWritten() + " uncompressed)", e);
 				if (ondone != null) ondone.run(new Pair<>(null, error));
 				result.error(error);
 			}
