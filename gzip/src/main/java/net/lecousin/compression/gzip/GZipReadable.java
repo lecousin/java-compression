@@ -54,6 +54,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 		header = new SynchronizationPoint<>();
 		readHeader();
 		inflater = new Inflater(true);
+		// TODO
+		LCCore.getApplication().getDefaultLogger().debug("NEW GZIPREADABLE", new Exception("============================================="));
 	}
 	
 	private IO.Readable.Buffered input;
@@ -436,6 +438,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	                	return null;
 	                }
 				} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
+				if (inflater.needsInput()) currentPos = currentLen;
 				if (!buffer.hasArray())
 					buffer.put(b, 0, total);
 				else

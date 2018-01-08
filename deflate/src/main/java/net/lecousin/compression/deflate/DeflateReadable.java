@@ -52,6 +52,8 @@ public class DeflateReadable extends ConcurrentCloseable implements IO.Readable 
 		inflater = new Inflater(nowrap);
 		this.input = input;
 		this.priority = priority;
+		// TODO
+		LCCore.getApplication().getDefaultLogger().debug("NEW DEFLATEREADABLE", new Exception("============================================="));
 	}
 	
 	private IO.Readable input;
