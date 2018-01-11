@@ -54,7 +54,11 @@ public class TestGZipReadableSeveralMembers extends TestReadable {
 		file.closeAsync();
 		for (GZIPOutputStream gout : gouts) try { gout.close(); } catch (Throwable t) {}
 		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.PRIORITY_NORMAL);
-		SimpleBufferedReadable bin = new SimpleBufferedReadable(fin, 8192);
+		IO.Readable.Buffered bin;
+		if (fileSize > 0 && fileSize < 10000)
+			bin = new SimpleBufferedReadable(fin, 3); // check we can correctly read the header even with slow IO
+		else
+			bin = new SimpleBufferedReadable(fin, 8192);
 		GZipReadable.SizeKnown gin = new GZipReadable.SizeKnown(bin, Task.PRIORITY_NORMAL, fileSize);
 		return gin;
 	}
