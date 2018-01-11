@@ -17,6 +17,11 @@ public class TestGZipReadable extends LCCoreAbstractTest {
 		testFile("gzip-test/multiple.gz");
 	}
 	
+	@Test
+	public void testWithExtraDataInHeader() throws Exception {
+		testFile("gzip-test/sample.txt.gz");
+	}
+	
 	@SuppressWarnings("resource")
 	private static void testFile(String filename) throws Exception {
 		IO.Readable source = LCCore.getApplication().getResource(filename, Task.PRIORITY_NORMAL);
