@@ -37,13 +37,13 @@
   		<dependency>
 	  		<groupId>net.lecousin</groupId>
 	  		<artifactId>core</artifactId>
-	  		<version>0.9.14</version>
+	  		<version>0.9.15</version>
   		</dependency>
   		<dependency>
 	  		<groupId>net.lecousin</groupId>
 	  		<artifactId>core</artifactId>
 	  		<type>test-jar</type>
-	  		<version>0.9.14</version>
+	  		<version>0.9.15</version>
   		</dependency>
 	  	<dependency>
 			<groupId>junit</groupId>
