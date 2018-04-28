@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.lecousin.compression</groupId>
   <artifactId>parent-pom</artifactId>
-  <version>0.1.5</version>
+  <version>0.1.6</version>
   <packaging>pom</packaging>
   
   <parent>
@@ -37,13 +37,13 @@
   		<dependency>
 	  		<groupId>net.lecousin</groupId>
 	  		<artifactId>core</artifactId>
-	  		<version>0.10.1</version>
+	  		<version>0.11.0</version>
   		</dependency>
   		<dependency>
 	  		<groupId>net.lecousin</groupId>
 	  		<artifactId>core</artifactId>
 	  		<type>test-jar</type>
-	  		<version>0.10.1</version>
+	  		<version>0.11.0</version>
   		</dependency>
 	  	<dependency>
 			<groupId>junit</groupId>

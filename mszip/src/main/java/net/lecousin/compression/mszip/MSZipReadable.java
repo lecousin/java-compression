@@ -245,6 +245,56 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 	}
 	
 	@Override
+	public AsyncWork<Integer, IOException> readFullySyncIfPossible(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+		int done = 0;
+		do {
+			if (error != null) {
+				if (ondone != null) ondone.run(new Pair<>(null, error));
+				return new AsyncWork<>(null, error);
+			}
+			if (!uncompress.dataReady.isUnblocked()) {
+				if (done == 0)
+					return readFullyAsync(buffer, ondone);
+				AsyncWork<Integer, IOException> r = new AsyncWork<>();
+				int d = done;
+				readFullyAsync(buffer, (res) -> {
+					if (ondone == null) return;
+					if (res.getValue1() == null) ondone.run(res);
+					else {
+						int n = res.getValue1().intValue();
+						if (n < 0) n = d;
+						else n += d;
+						ondone.run(new Pair<>(Integer.valueOf(n), null));
+					}
+				}).listenInline((nb) -> {
+					int n = nb.intValue();
+					if (n < 0) n = d;
+					else n += d;
+					r.unblockSuccess(Integer.valueOf(n));
+				}, r);
+				return r;
+			}
+			if (uncompress.pos < uncompress.size) {
+				int l = uncompress.size - uncompress.pos;
+				if (l > buffer.remaining()) l = buffer.remaining();
+				buffer.put(uncompress.uncompressed, uncompress.pos, l);
+				uncompress.pos += l;
+				done += l;
+				if (!buffer.hasRemaining())
+					return new AsyncWork<>(Integer.valueOf(done), null);
+			}
+			synchronized (this) {
+				// current block is completely read
+				if (nextUncompress == null)
+					return new AsyncWork<>(Integer.valueOf(done > 0 ? done : -1), null);
+				uncompress = nextUncompress;
+				if (!eof)
+					nextUncompress = new BlockUncompressor(uncompress.blockIndex + 1);
+			}
+		} while (true);
+	}
+	
+	@Override
 	public int readAsync() throws IOException {
 		if (error != null) throw error;
 		// wait for current block to have some data uncompressed
