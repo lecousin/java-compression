@@ -26,12 +26,12 @@ So far only few compression methods are implemented, more will come...
 [![Codecov](https://codecov.io/gh/lecousin/java-compression/graph/badge.svg)](https://codecov.io/gh/lecousin/java-compression/branch/master)
 
 Modules:
- * deflate [![Javadoc](https://img.shields.io/badge/javadoc-0.1.6-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/deflate/0.1.6)
- * gzip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.6-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/gzip/0.1.6)
- * mszip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.6-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/mszip/0.1.6)
+ * deflate [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/deflate/0.1.7)
+ * gzip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/gzip/0.1.7)
+ * mszip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/mszip/0.1.7)
 
-### Next minor release - branch 0.1   
+### Development branch 
 
-![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=0.1 "Build Status")
-![build status](https://ci.appveyor.com/api/projects/status/github/lecousin/java-compression?branch=0.1&svg=true "Build Status")
-[![Codecov](https://codecov.io/gh/lecousin/java-compression/branch/0.1/graph/badge.svg)](https://codecov.io/gh/lecousin/java-compression/branch/0.1)
+![build status](https://travis-ci.org/lecousin/java-compression.svg?branch=dev "Build Status")
+![build status](https://ci.appveyor.com/api/projects/status/github/lecousin/java-compression?branch=dev&svg=true "Build Status")
+[![Codecov](https://codecov.io/gh/lecousin/java-compression/branch/dev/graph/badge.svg)](https://codecov.io/gh/lecousin/java-compression/branch/dev)
