@@ -36,6 +36,7 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 	protected byte priority;
 	protected Deflater deflater;
 	protected LimitWriteOperations writeOps;
+	protected SynchronizationPoint<IOException> finishing = null;
 
 	@Override
 	public TaskManager getTaskManager() {
@@ -58,7 +59,15 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 	
 	@Override
 	protected ISynchronizationPoint<?> closeUnderlyingResources() {
-		return output.closeAsync();
+		if (finishing == null)
+			finishAsync();
+		if (finishing.isUnblocked())
+			return output.closeAsync();
+		SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
+		finishing.listenInlineSP(() -> {
+			output.closeAsync().listenInline(sp);
+		}, sp);
+		return sp;
 	}
 	
 	@Override
@@ -128,24 +137,36 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 	
 	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */
 	public void finishSynch() throws IOException {
-		AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
-		if (lastWrite != null) {
-			lastWrite.blockException(0);
+		if (finishing != null) {
+			finishing.blockException(0);
+			return;
 		}
-		deflater.finish();
-		if (!deflater.finished()) {
-			byte[] writeBuf = new byte[8192];
-			do {
-				int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
-				if (nb <= 0) break;
-				output.writeSync(ByteBuffer.wrap(writeBuf, 0, nb));
-			} while (!deflater.finished());
+		finishing = new SynchronizationPoint<>();
+		try {
+			AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
+			if (lastWrite != null) {
+				lastWrite.blockException(0);
+			}
+			deflater.finish();
+			if (!deflater.finished()) {
+				byte[] writeBuf = new byte[8192];
+				do {
+					int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
+					if (nb <= 0) break;
+					output.writeSync(ByteBuffer.wrap(writeBuf, 0, nb));
+				} while (!deflater.finished());
+			}
+			finishing.unblock();
+		} catch (IOException e) {
+			finishing.error(e);
+			throw e;
 		}
 	}
 	
 	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */
 	public ISynchronizationPoint<IOException> finishAsync() {
-		SynchronizationPoint<IOException> result = new SynchronizationPoint<>();
+		if (finishing != null) return finishing;
+		finishing = new SynchronizationPoint<>();
 		Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Finishing zip compression", priority) {
 			@Override
 			public Void run() {
@@ -158,21 +179,21 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 						if (nb <= 0) break;
 						try { lastWrite = writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb)); }
 						catch (IOException e) {
-							result.error(e);
+							finishing.error(e);
 							return null;
 						}
 					} while (!deflater.finished());
 				}
 				if (lastWrite == null) lastWrite = writeOps.getLastPendingOperation();
 				if (lastWrite != null)
-					lastWrite.listenInline(result);
+					lastWrite.listenInline(finishing);
 				else
-					result.unblock();
+					finishing.unblock();
 				return null;
 			}
 		};
 		task.start();
-		return operation(result);
+		return operation(finishing);
 	}
 
 }

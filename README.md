@@ -9,6 +9,13 @@ taking advantage of multi-threading and more advanced IO model.
 
 So far only few compression methods are implemented, more will come...
 
+## Supported compression methods
+
+ * deflate and gzip: it uses the [java.util.zip](https://docs.oracle.com/javase/8/docs/api/java/util/zip/package-summary.html) package, wrapping them into cpu tasks to provide asynchronous functionalities
+ * mszip: format used by CAB file format, consisting in 32KB blocks of deflate compressed data
+ * lzma: taken from [XZ](https://tukaani.org/xz/java.html) library, adapted to provide asynchronous functionalities
+ 
+
 ## Build status
 
 ### Current version - branch master
