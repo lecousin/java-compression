@@ -4,7 +4,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
+import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.memory.ByteArrayCache;
 
@@ -103,7 +103,7 @@ final class LZDecoder {
             repeat(pendingDist, pendingLen);
     }
 
-    public ISynchronizationPoint<IOException> copyUncompressedSyncIfPossible(IO.Readable.Buffered input, int len) {
+    public IAsync<IOException> copyUncompressedSyncIfPossible(IO.Readable.Buffered input, int len) {
         int copySize = Math.min(bufSize - pos, len);
         return TaskUtil.checkRead(
         	input.readFullySyncIfPossible(ByteBuffer.wrap(buf, pos, copySize), (res) -> {

@@ -4,12 +4,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.zip.Deflater;
 
-import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Writable;
 import net.lecousin.framework.io.util.LimitWriteOperationsReuseBuffers;
@@ -46,21 +44,21 @@ public class DeflateCompressor {
 	private boolean nowrap;
 	
 	/** Compress from a Readable to a Writable. */
-	public ISynchronizationPoint<Exception> compress(Readable input, Writable output, int bufferSize, int maxBuffers, byte priority) {
+	public IAsync<Exception> compress(Readable input, Writable output, int bufferSize, int maxBuffers, byte priority) {
 		Deflater deflater = new Deflater(level, nowrap);
 		LimitWriteOperationsReuseBuffers limit = new LimitWriteOperationsReuseBuffers(output, bufferSize, maxBuffers);
 		byte[] bufRead = new byte[bufferSize];
 		ByteBuffer buffer = ByteBuffer.wrap(bufRead);
-		AsyncWork<Integer,IOException> task = input.readAsync(buffer);
-		SynchronizationPoint<Exception> end = new SynchronizationPoint<>();
-		task.listenAsync(new Compress(input, output, task, bufRead, deflater, limit, priority, end), true);
+		AsyncSupplier<Integer,IOException> task = input.readAsync(buffer);
+		Async<Exception> end = new Async<>();
+		task.thenStart(new Compress(input, output, task, bufRead, deflater, limit, priority, end), true);
 		return end;
 	}
 	
 	private static class Compress extends Task.Cpu<Void,Exception> {
 		private Compress(
-			Readable input, Writable output, AsyncWork<Integer,IOException> readTask, byte[] readBuf,
-			Deflater delfater, LimitWriteOperationsReuseBuffers limit, byte priority, SynchronizationPoint<Exception> end
+			Readable input, Writable output, AsyncSupplier<Integer,IOException> readTask, byte[] readBuf,
+			Deflater delfater, LimitWriteOperationsReuseBuffers limit, byte priority, Async<Exception> end
 		) {
 			super("Zip compression", priority);
 			this.input = input;
@@ -70,22 +68,19 @@ public class DeflateCompressor {
 			this.deflater = delfater;
 			this.limit = limit;
 			this.end = end;
-			end.onCancel(new Listener<CancelException>() {
-				@Override
-				public void fire(CancelException event) {
-					readTask.unblockCancel(event);
-					Compress.this.cancel(event);
-				}
+			end.onCancel(event -> {
+				readTask.unblockCancel(event);
+				Compress.this.cancel(event);
 			});
 		}
 		
 		private Readable input;
 		private Writable output;
-		private AsyncWork<Integer,IOException> readTask;
+		private AsyncSupplier<Integer,IOException> readTask;
 		private byte[] readBuf;
 		private Deflater deflater;
 		private LimitWriteOperationsReuseBuffers limit;
-		private SynchronizationPoint<Exception> end;
+		private Async<Exception> end;
 		
 		@Override
 		public Void run() throws Exception {
@@ -137,11 +132,11 @@ public class DeflateCompressor {
 					else if (writeBuf != null)
 						limit.freeBuffer(writeBuf);
 					// next read
-					AsyncWork<Integer,IOException> task = input.readAsync(ByteBuffer.wrap(readBuf));
-					task.listenAsync(new Compress(input, output, task, readBuf, deflater, limit, getPriority(), end), true);
+					AsyncSupplier<Integer,IOException> task = input.readAsync(ByteBuffer.wrap(readBuf));
+					task.thenStart(new Compress(input, output, task, readBuf, deflater, limit, getPriority(), end), true);
 				} else {
 					// write compressed data
-					AsyncWork<Integer, IOException> write = null;
+					AsyncSupplier<Integer, IOException> write = null;
 					if (pos > 0)
 						write = writeCompressedData(writeBuf, pos);
 					else {
@@ -152,7 +147,7 @@ public class DeflateCompressor {
 					if (write == null)
 						end.unblock();
 					else
-						write.listenInline(new Runnable() {
+						write.onDone(new Runnable() {
 							@Override
 							public void run() {
 								end.unblock();
@@ -166,7 +161,7 @@ public class DeflateCompressor {
 			return null;
 		}
 		
-		private AsyncWork<Integer,IOException> writeCompressedData(ByteBuffer writeBuf, int nb) throws IOException {
+		private AsyncSupplier<Integer,IOException> writeCompressedData(ByteBuffer writeBuf, int nb) throws IOException {
 			writeBuf.limit(nb);
 			writeBuf.position(0);
 			// may block to wait for writing operations

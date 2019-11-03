@@ -9,16 +9,16 @@ import java.util.zip.GZIPOutputStream;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.core.test.io.TestReadableSeekable;
+import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.ReadableToSeekable;
 import net.lecousin.framework.io.buffering.SimpleBufferedReadable;
 
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-@RunWith(Parameterized.class)
+@RunWith(LCConcurrentRunner.Parameterized.class) @org.junit.runners.Parameterized.UseParametersRunnerFactory(LCConcurrentRunner.ConcurrentParameterizedRunnedFactory.class)
 public class TestGZipReadableOneMemberAsSeekable extends TestReadableSeekable {
 
 	@Parameters(name = "nbBuf = {2}")

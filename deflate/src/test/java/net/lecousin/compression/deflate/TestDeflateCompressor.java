@@ -10,14 +10,14 @@ import net.lecousin.framework.collections.ArrayUtil;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIO;
+import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
 import net.lecousin.framework.io.FileIO;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-@RunWith(Parameterized.class)
+@RunWith(LCConcurrentRunner.Parameterized.class) @org.junit.runners.Parameterized.UseParametersRunnerFactory(LCConcurrentRunner.ConcurrentParameterizedRunnedFactory.class)
 public class TestDeflateCompressor extends LCCoreAbstractTest {
 
 	@Parameters(name = "nbBuf = {2}")
@@ -35,7 +35,7 @@ public class TestDeflateCompressor extends LCCoreAbstractTest {
 	private byte[] testBuf;
 	private int nbBuf;
 	
-	@Test(timeout=120000)
+	@Test
 	public void test() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_compressor");
 		tmp.deleteOnExit();

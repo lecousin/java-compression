@@ -3,7 +3,7 @@ package net.lecousin.compression.lzma.rangecoder;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
+import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.memory.ByteArrayCache;
 
@@ -49,7 +49,7 @@ public final class RangeEncoderToBuffer extends RangeEncoder {
         output.write(buf, 0, bufPos);
     }
     
-    public ISynchronizationPoint<IOException> writeAsync(IO.Writable.Buffered output) {
+    public IAsync<IOException> writeAsync(IO.Writable.Buffered output) {
     	return output.writeAsync(ByteBuffer.wrap(buf, 0, bufPos));
     }
 

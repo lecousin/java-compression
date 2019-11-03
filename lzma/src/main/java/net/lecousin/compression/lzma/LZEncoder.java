@@ -3,7 +3,7 @@ package net.lecousin.compression.lzma;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
+import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.memory.IntArrayCache;
@@ -278,7 +278,7 @@ public abstract class LZEncoder {
         output.write(buf, readPos + 1 - backward, len);
     }
     
-    public ISynchronizationPoint<IOException> copyUncompressedAsync(IO.Writable.Buffered output, int backward, int len) {
+    public IAsync<IOException> copyUncompressedAsync(IO.Writable.Buffered output, int backward, int len) {
     	return output.writeAsync(ByteBuffer.wrap(buf, readPos + 1 - backward, len));
     }
 

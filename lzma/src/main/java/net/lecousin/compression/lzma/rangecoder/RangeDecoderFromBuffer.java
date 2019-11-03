@@ -6,8 +6,8 @@ import java.nio.ByteBuffer;
 
 import net.lecousin.compression.lzma.CorruptedInputException;
 import net.lecousin.compression.lzma.TaskUtil;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.memory.ByteArrayCache;
@@ -47,19 +47,19 @@ public final class RangeDecoderFromBuffer extends RangeDecoder {
         	throw new EOFException();
     }
 
-    public ISynchronizationPoint<IOException> prepareInputBufferAsync(IO.Readable.Buffered input, int len) {
-        if (len < INIT_SIZE) return new SynchronizationPoint<>(new CorruptedInputException());
+    public IAsync<IOException> prepareInputBufferAsync(IO.Readable.Buffered input, int len) {
+        if (len < INIT_SIZE) return new Async<>(new CorruptedInputException());
         
         try {
 	        int i = input.readAsync();
 	        if (i == -2)
 	        	return TaskUtil.continueDecompression(input, input.canStartReading(), () -> { return prepareInputBufferAsync(input, len); });
 	
-	        if (i != 0x00) return new SynchronizationPoint<>(new CorruptedInputException());
+	        if (i != 0x00) return new Async<>(new CorruptedInputException());
 	
 	        code = DataUtil.readIntegerBigEndian(input);
         } catch (IOException e) {
-        	return new SynchronizationPoint<>(e);
+        	return new Async<>(e);
         }
         range = 0xFFFFFFFF;
 

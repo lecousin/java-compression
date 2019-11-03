@@ -8,7 +8,7 @@
   <parent>
   	<groupId>net.lecousin</groupId>
   	<artifactId>parent-pom</artifactId>
-  	<version>0.8</version>
+  	<version>20191012.2</version>
   </parent>
   
   <modules>
@@ -38,13 +38,13 @@
   		<dependency>
 	  		<groupId>net.lecousin</groupId>
 	  		<artifactId>core</artifactId>
-	  		<version>0.15.0</version>
+	  		<version>0.16.0</version>
   		</dependency>
   		<dependency>
 	  		<groupId>net.lecousin</groupId>
 	  		<artifactId>core</artifactId>
 	  		<type>test-jar</type>
-	  		<version>0.15.0</version>
+	  		<version>0.16.0</version>
   		</dependency>
 	  	<dependency>
 			<groupId>junit</groupId>

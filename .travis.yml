@@ -4,13 +4,7 @@ jdk:
   - openjdk8
 dist: trusty
 
-script: mvn test verify -B
-
-after_script:
- - echo _____________CHECKSTYLE______________
- - cat */target/checkstyle-result.xml
- - echo _____________SOPTBUGS______________
- - cat */target/findbugsXml.xml
+script: mvn test verify install sonar:sonar -Dsonar.projectKey=lecousin_java-compression -B 
   
 after_success:
  - bash <(curl -s https://codecov.io/bash)

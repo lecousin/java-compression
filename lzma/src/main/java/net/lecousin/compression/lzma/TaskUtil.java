@@ -2,13 +2,13 @@ package net.lecousin.compression.lzma;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.util.function.Supplier;
 
 import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
-import net.lecousin.framework.util.Provider;
 
 public class TaskUtil {
 	
@@ -16,24 +16,24 @@ public class TaskUtil {
 		return new Task.Cpu.FromRunnable("LZMA Decompression", input.getPriority(), r);
 	}
 
-	public static SynchronizationPoint<IOException> continueDecompression(IO.Readable.Buffered input, ISynchronizationPoint<IOException> waiting, Provider<ISynchronizationPoint<IOException>> continueProvider) {
-		SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
-    	waiting.listenAsync(decompressionTask(input, () -> {
-    		continueProvider.provide().listenInline(sp);
+	public static Async<IOException> continueDecompression(IO.Readable.Buffered input, IAsync<IOException> waiting, Supplier<IAsync<IOException>> continueProvider) {
+		Async<IOException> sp = new Async<>();
+    	waiting.thenStart(decompressionTask(input, () -> {
+    		continueProvider.get().onDone(sp);
     	}), sp);
     	return sp;
 	}
 	
-	public static ISynchronizationPoint<IOException> checkRead(AsyncWork<Integer, IOException> read, int len) {
-        if (read.isUnblocked()) {
+	public static IAsync<IOException> checkRead(AsyncSupplier<Integer, IOException> read, int len) {
+        if (read.isDone()) {
         	if (read.isSuccessful()) {
         		if (read.getResult().intValue() != len)
-        			return new SynchronizationPoint<>(new EOFException());
+        			return new Async<>(new EOFException());
         	}
         	return read;
         }
-        SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
-        read.listenInline(() -> {
+        Async<IOException> sp = new Async<>();
+        read.onDone(() -> {
         	if (read.getResult().intValue() != len)
         		sp.error(new EOFException());
         	else
@@ -46,10 +46,10 @@ public class TaskUtil {
 		return new Task.Cpu.FromRunnable("LZMA Compression", output.getPriority(), r);
 	}
 
-	public static SynchronizationPoint<IOException> continueCompression(IO.Writable.Buffered output, ISynchronizationPoint<IOException> waiting, Provider<ISynchronizationPoint<IOException>> continueProvider) {
-		SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
-		waiting.listenAsync(compressionTask(output, () -> {
-    		continueProvider.provide().listenInline(sp);
+	public static Async<IOException> continueCompression(IO.Writable.Buffered output, IAsync<IOException> waiting, Supplier<IAsync<IOException>> continueProvider) {
+		Async<IOException> sp = new Async<>();
+		waiting.thenStart(compressionTask(output, () -> {
+    		continueProvider.get().onDone(sp);
     	}), sp);
     	return sp;
 	}

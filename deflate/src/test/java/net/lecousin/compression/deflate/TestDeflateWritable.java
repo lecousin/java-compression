@@ -10,21 +10,21 @@ import java.util.zip.InflaterInputStream;
 
 import net.lecousin.framework.collections.ArrayUtil;
 import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIO;
+import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.mutable.Mutable;
 import net.lecousin.framework.mutable.MutableInteger;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-@RunWith(Parameterized.class)
+@RunWith(LCConcurrentRunner.Parameterized.class) @org.junit.runners.Parameterized.UseParametersRunnerFactory(LCConcurrentRunner.ConcurrentParameterizedRunnedFactory.class)
 public class TestDeflateWritable extends LCCoreAbstractTest {
 
 	@Parameters(name = "nbBuf = {1}")
@@ -41,7 +41,7 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 	private int nbBuf;
 	
 	@SuppressWarnings("resource")
-	@Test(timeout=120000)
+	@Test
 	public void testCompressSyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
 		tmp.deleteOnExit();
@@ -54,7 +54,7 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 		checkFile(tmp);
 	}
 	
-	@Test(timeout=120000)
+	@Test
 	@SuppressWarnings("resource")
 	public void testCompressAsyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
@@ -62,13 +62,13 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
 		DeflateWritable gout = new DeflateWritable(fout, Task.PRIORITY_NORMAL, Deflater.BEST_COMPRESSION, false, 3);
 		MutableInteger nb = new MutableInteger(0);
-		SynchronizationPoint<Exception> done = new SynchronizationPoint<>();
-		Mutable<AsyncWork<Integer, IOException>> write = new Mutable<>(null);
+		Async<Exception> done = new Async<>();
+		Mutable<AsyncSupplier<Integer, IOException>> write = new Mutable<>(null);
 		if (nbBuf > 0)
 			write.set(gout.writeAsync(ByteBuffer.wrap(testBuf)));
 		else
-			write.set(new AsyncWork<>(Integer.valueOf(0), null));
-		write.get().listenInline(new Runnable() {
+			write.set(new AsyncSupplier<>(Integer.valueOf(0), null));
+		write.get().onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (write.get().hasError()) {
@@ -81,11 +81,11 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 				}
 				if (nb.inc() < nbBuf) {
 					write.set(gout.writeAsync(ByteBuffer.wrap(testBuf)));
-					write.get().listenInline(this);
+					write.get().onDone(this);
 					return;
 				}
-				ISynchronizationPoint<IOException> finish = gout.finishAsync();
-				finish.listenInline(new Runnable() {
+				IAsync<IOException> finish = gout.finishAsync();
+				finish.onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (finish.hasError()) {

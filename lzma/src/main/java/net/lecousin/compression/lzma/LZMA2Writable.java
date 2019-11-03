@@ -2,14 +2,15 @@ package net.lecousin.compression.lzma;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 
 import net.lecousin.compression.lzma.rangecoder.RangeEncoderToBuffer;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
 import net.lecousin.framework.concurrent.Threading;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.util.DataUtil;
@@ -17,9 +18,8 @@ import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.memory.IntArrayCache;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.RunnableWithParameter;
 
-public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
+public class LZMA2Writable extends ConcurrentCloseable<IOException> implements IO.Writable {
 
     static final int COMPRESSED_SIZE_MAX = 64 << 10;
 
@@ -103,28 +103,28 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
     }
     
     @Override
-    public AsyncWork<Integer, IOException> writeAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+    public AsyncSupplier<Integer, IOException> writeAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
         if (finished)
             return IOUtil.error(new IOException("Stream finished or closed"), ondone);
 
-        AsyncWork<Integer, IOException> result = new AsyncWork<>();
+        AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
         TaskUtil.compressionTask(output, () -> {
         	writeAsync(buffer, 0, result, ondone);
         }).start();
         return result;
     }
     
-    private void writeAsync(ByteBuffer buffer, int done, AsyncWork<Integer, IOException> result, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+    private void writeAsync(ByteBuffer buffer, int done, AsyncSupplier<Integer, IOException> result, Consumer<Pair<Integer, IOException>> ondone) {
         while (buffer.hasRemaining()) {
             int used = lz.fillWindow(buffer);
             done += used;
             pendingSize += used;
 
             if (lzma.encodeForLZMA2()) {
-                ISynchronizationPoint<IOException> write = writeChunkAsync();
-                if (!write.isUnblocked()) {
+                IAsync<IOException> write = writeChunkAsync();
+                if (!write.isDone()) {
                 	int d = done;
-                	write.listenAsync(TaskUtil.compressionTask(output, () -> {
+                	write.thenStart(TaskUtil.compressionTask(output, () -> {
                 		writeAsync(buffer, d, result, ondone);
                 	}), result);
                 	return;
@@ -161,7 +161,7 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
         rc.reset();
     }
 
-    private ISynchronizationPoint<IOException> writeChunkAsync() {
+    private IAsync<IOException> writeChunkAsync() {
         int compressedSize = rc.finish();
         int uncompressedSize = lzma.getUncompressedSize();
 
@@ -170,7 +170,7 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
 
         // +2 because the header of a compressed chunk is 2 bytes
         // bigger than the header of an uncompressed chunk.
-        ISynchronizationPoint<IOException> write;
+        IAsync<IOException> write;
         if (compressedSize + 2 < uncompressedSize) {
             write = writeLZMAAsync(uncompressedSize, compressedSize);
         } else {
@@ -180,10 +180,10 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
             write = writeUncompressedAsync(uncompressedSize);
         }
 
-        if (!write.isUnblocked()) {
-        	SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
+        if (!write.isDone()) {
+        	Async<IOException> sp = new Async<>();
         	int uc = uncompressedSize;
-        	write.listenAsync(TaskUtil.compressionTask(output, () -> {
+        	write.thenStart(TaskUtil.compressionTask(output, () -> {
                 endWriteChunk(uc);
                 sp.unblock();
         	}), sp);
@@ -192,7 +192,7 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
         if (!write.isSuccessful())
         	return write;
         endWriteChunk(uncompressedSize);
-        return new SynchronizationPoint<>(true);
+        return new Async<>(true);
     }
     
     private void endWriteChunk(int uncompressedSize) {
@@ -233,7 +233,7 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
         dictResetNeeded = false;
     }
 
-    private ISynchronizationPoint<IOException> writeLZMAAsync(int uncompressedSize, int compressedSize) {
+    private IAsync<IOException> writeLZMAAsync(int uncompressedSize, int compressedSize) {
         int control;
 
         if (propsNeeded) {
@@ -258,7 +258,7 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
 	        if (propsNeeded)
 	        	output.write((byte)props);
         } catch (IOException e) {
-        	return new SynchronizationPoint<>(e);
+        	return new Async<>(e);
         }
 
         propsNeeded = false;
@@ -281,19 +281,19 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
         stateResetNeeded = true;
     }
 
-    private ISynchronizationPoint<IOException> writeUncompressedAsync(int uncompressedSize) {
+    private IAsync<IOException> writeUncompressedAsync(int uncompressedSize) {
         while (uncompressedSize > 0) {
             int chunkSize = Math.min(uncompressedSize, COMPRESSED_SIZE_MAX);
             try { // TODO async ?
 	            output.write((byte)(dictResetNeeded ? 0x01 : 0x02));
 	            DataUtil.writeShortBigEndian(output, (short)(chunkSize - 1));
             } catch (IOException e) {
-            	return new SynchronizationPoint<>(e);
+            	return new Async<>(e);
             }
-            ISynchronizationPoint<IOException> write = lz.copyUncompressedAsync(output, uncompressedSize, chunkSize);
+            IAsync<IOException> write = lz.copyUncompressedAsync(output, uncompressedSize, chunkSize);
             uncompressedSize -= chunkSize;
             dictResetNeeded = false;
-            if (!write.isUnblocked()) {
+            if (!write.isDone()) {
             	int remaining = uncompressedSize;
             	return TaskUtil.continueCompression(output, write, () -> { return writeUncompressedAsync(remaining); });
             } if (!write.isSuccessful())
@@ -301,7 +301,7 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
         }
 
         stateResetNeeded = true;
-        return new SynchronizationPoint<>(true);
+        return new Async<>(true);
     }
 
     public void finishSync() throws IOException {
@@ -326,21 +326,21 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
         output.flush().blockException(0);
     }
 
-    public ISynchronizationPoint<IOException> finishAsync() {
+    public IAsync<IOException> finishAsync() {
         assert !finished;
 
         lz.setFinishing();
-        SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
+        Async<IOException> sp = new Async<>();
         finishing(sp);
         return sp;
     }
     
-    private void finishing(SynchronizationPoint<IOException> sp) {
+    private void finishing(Async<IOException> sp) {
         while (pendingSize > 0) {
             lzma.encodeForLZMA2();
-            ISynchronizationPoint<IOException> write = writeChunkAsync();
-            if (!write.isUnblocked()) {
-            	write.listenAsync(TaskUtil.compressionTask(output, () -> {
+            IAsync<IOException> write = writeChunkAsync();
+            if (!write.isDone()) {
+            	write.thenStart(TaskUtil.compressionTask(output, () -> {
             		finishing(sp);
             	}), sp);
             	return;
@@ -366,26 +366,26 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
         lz = null;
         rc.putArraysToCache(arrayCache);
         rc = null;
-        output.flush().listenInline(sp);
+        output.flush().onDone(sp);
     }
     
     @Override
-    protected ISynchronizationPoint<?> closeUnderlyingResources() {
+    protected IAsync<IOException> closeUnderlyingResources() {
     	if (output != null) {
     		if (!finished) {
-    			SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
-    			finishAsync().listenInlineSP(() -> {
-    				output.closeAsync().listenInline(sp);
+    			Async<IOException> sp = new Async<>();
+    			finishAsync().onDone(() -> {
+    				output.closeAsync().onDone(sp);
     			}, sp);
     			return sp;
     		}
     		return output.closeAsync();
     	}
-    	return new SynchronizationPoint<>(true);
+    	return new Async<>(true);
     }
     
     @Override
-    protected void closeResources(SynchronizationPoint<Exception> ondone) {
+    protected void closeResources(Async<IOException> ondone) {
     	output = null;
     	// TODO
     	ondone.unblock();
@@ -417,7 +417,7 @@ public class LZMA2Writable extends ConcurrentCloseable implements IO.Writable {
 	}
 
 	@Override
-	public ISynchronizationPoint<IOException> canStartWriting() {
+	public IAsync<IOException> canStartWriting() {
 		return output.canStartWriting();
 	}
 	

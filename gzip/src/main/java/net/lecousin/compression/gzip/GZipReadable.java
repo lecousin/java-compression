@@ -3,27 +3,27 @@ package net.lecousin.compression.gzip;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
-import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
 import net.lecousin.framework.concurrent.Threading;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.CancelException;
+import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.RunnableWithParameter;
 import net.lecousin.framework.util.StringUtil;
 
 /** GZip decompression. */
-public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
+public class GZipReadable extends ConcurrentCloseable<IOException> implements IO.Readable {
 
 	/** GZipReadable with a known uncompressed size. */
 	public static class SizeKnown extends GZipReadable implements IO.KnownSize {
@@ -36,8 +36,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 		private long uncompressedSize;
 		
 		@Override
-		public AsyncWork<Long, IOException> getSizeAsync() {
-			return new AsyncWork<>(Long.valueOf(uncompressedSize), null);
+		public AsyncSupplier<Long, IOException> getSizeAsync() {
+			return new AsyncSupplier<>(Long.valueOf(uncompressedSize), null);
 		}
 		
 		@Override
@@ -50,7 +50,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	public GZipReadable(IO.Readable.Buffered input, byte priority) {
 		this.input = input;
 		this.priority = priority;
-		header = new SynchronizationPoint<>();
+		header = new Async<>();
 		readHeader();
 		inflater = new Inflater(true);
 	}
@@ -58,13 +58,13 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	private IO.Readable.Buffered input;
 	private byte priority;
 	private Inflater inflater;
-	private SynchronizationPoint<IOException> header;
+	private Async<IOException> header;
 	private byte[] currentBuffer = null;
 	private int currentPos = 0;
 	private int currentLen = 0;
 	private IOException error = null;
 	private boolean eof = false;
-	private AsyncWork<Integer,IOException> currentRead = null;
+	private AsyncSupplier<Integer,IOException> currentRead = null;
 	
 	@Override
 	public byte getPriority() {
@@ -77,12 +77,12 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	}
 	
 	@Override
-	protected ISynchronizationPoint<?> closeUnderlyingResources() {
+	protected IAsync<IOException> closeUnderlyingResources() {
 		return input.closeAsync();
 	}
 	
 	@Override
-	protected void closeResources(SynchronizationPoint<Exception> ondone) {
+	protected void closeResources(Async<IOException> ondone) {
 		input = null;
 		currentBuffer = null;
 		inflater.end();
@@ -91,14 +91,14 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	}
 	
 	@Override
-	public ISynchronizationPoint<IOException> canStartReading() {
+	public IAsync<IOException> canStartReading() {
 		return header;
 	}
 	
-	private SynchronizationPoint<NoException> nextBuffer() {
-		SynchronizationPoint<NoException> sp = new SynchronizationPoint<>();
-		AsyncWork<ByteBuffer, IOException> read = input.readNextBufferAsync();
-		read.listenInline(() -> {
+	private Async<NoException> nextBuffer() {
+		Async<NoException> sp = new Async<>();
+		AsyncSupplier<ByteBuffer, IOException> read = input.readNextBufferAsync();
+		read.onDone(() -> {
 			if (read.hasError()) error = read.getError();
 			else if (read.isCancelled()) error = new IOException("Operation cancelled", read.getCancelEvent());
 			else {
@@ -145,7 +145,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 			return;
 		}
 		if (currentPos == currentLen) {
-			nextBuffer().listenInline(() -> { readHeader(); });
+			nextBuffer().onDone(() -> { readHeader(); });
 			return;
 		}
 		new Task.Cpu<Void, NoException>("Read GZip header", priority) {
@@ -300,39 +300,39 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	}
 	
 	@Override
-	public AsyncWork<Integer,IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
+	public AsyncSupplier<Integer,IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer,IOException>> ondone) {
 		return readAsync(buffer, ondone, false);
 	}
 
-	private AsyncWork<Integer,IOException> readAsync(
-		ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone, boolean isCurrent
+	private AsyncSupplier<Integer,IOException> readAsync(
+		ByteBuffer buffer, Consumer<Pair<Integer,IOException>> ondone, boolean isCurrent
 	) {
 		if (error != null) {
-			if (ondone != null) ondone.run(new Pair<>(null, error));
-			return new AsyncWork<>(null, error);
+			if (ondone != null) ondone.accept(new Pair<>(null, error));
+			return new AsyncSupplier<>(null, error);
 		}
-		if (!header.isUnblocked()) {
-			AsyncWork<Integer,IOException> res = new AsyncWork<Integer,IOException>();
+		if (!header.isDone()) {
+			AsyncSupplier<Integer,IOException> res = new AsyncSupplier<Integer,IOException>();
 			currentRead = res;
-			header.listenInline(() -> { readAsync(buffer, ondone, true).listenInline(res); });
+			header.onDone(() -> { readAsync(buffer, ondone, true).forward(res); });
 			return operation(res);
 		}
 		if (eof) {
-			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
-			return new AsyncWork<Integer,IOException>(Integer.valueOf(-1), null);
+			if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
+			return new AsyncSupplier<Integer,IOException>(Integer.valueOf(-1), null);
 		}
-		if (!isCurrent && currentRead != null && !currentRead.isUnblocked()) {
+		if (!isCurrent && currentRead != null && !currentRead.isDone()) {
 			// wait for current read to finish
-			AsyncWork<Integer, IOException> result = new AsyncWork<>();
-			AsyncWork<Integer, IOException> previous = currentRead;
+			AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
+			AsyncSupplier<Integer, IOException> previous = currentRead;
 			currentRead = result;
-			previous.listenInline(() -> {
-				readAsync(buffer, ondone, true).listenInline(result);
+			previous.onDone(() -> {
+				readAsync(buffer, ondone, true).forward(result);
 			});
 			return operation(result);
 		}
 		if (!inflater.needsInput()) {
-			AsyncWork<Integer, IOException> result = new AsyncWork<>();
+			AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
 			InflateTask inflate = new InflateTask(buffer, result, ondone, false);
 			currentRead = result;
 			operation(inflate.start());
@@ -340,11 +340,11 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				result.cancel(inflate.getCancelEvent());
 			return result;
 		}
-		AsyncWork<Integer, IOException> result = new AsyncWork<>();
+		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
 		if (currentPos == currentLen) {
 			currentRead = result;
-			nextBuffer().listenInline(() -> {
-				readAsync(buffer, ondone, true).listenInline(result);
+			nextBuffer().onDone(() -> {
+				readAsync(buffer, ondone, true).forward(result);
 			});
 			return operation(result);
 		}
@@ -358,8 +358,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	
 	private class InflateTask extends Task.Cpu<Void, NoException> {
 		private InflateTask(
-			ByteBuffer buffer, AsyncWork<Integer, IOException> result,
-			RunnableWithParameter<Pair<Integer,IOException>> ondone, boolean setInput
+			ByteBuffer buffer, AsyncSupplier<Integer, IOException> result,
+			Consumer<Pair<Integer,IOException>> ondone, boolean setInput
 		) {
 			super("Uncompressing gzip: " + input.getSourceDescription(), priority);
 			this.buffer = buffer;
@@ -369,8 +369,8 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 		}
 		
 		private ByteBuffer buffer;
-		private AsyncWork<Integer, IOException> result;
-		private RunnableWithParameter<Pair<Integer,IOException>> ondone;
+		private AsyncSupplier<Integer, IOException> result;
+		private Consumer<Pair<Integer,IOException>> ondone;
 		private boolean setInput;
 
 		@Override
@@ -405,13 +405,13 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	                if (inflater.finished() || inflater.needsDictionary()) {
 	                	currentPos = currentLen - inflater.getRemaining();
 	                	skipTrailer();
-	                	header = new SynchronizationPoint<>();
+	                	header = new Async<>();
 	                	readHeader();
 	                	inflater.reset();
 	                	if (total <= 0) {
 	                		// no data read yet
-	                		header.listenInline(() -> {
-	                			readAsync(buffer, ondone, true).listenInline(result);
+	                		header.onDone(() -> {
+	                			readAsync(buffer, ondone, true).forward(result);
 	                		});
 	                		return null;
 	                	}
@@ -420,7 +420,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	                }
 	                if (inflater.needsInput()) {
 		                if (total > 0) break; // some data read
-	                	readAsync(buffer, ondone, true).listenInline(result);
+	                	readAsync(buffer, ondone, true).forward(result);
 	                	return null;
 	                }
 				} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
@@ -429,13 +429,13 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 				else
 					buffer.position(off + total - buffer.arrayOffset());
 				Integer r = Integer.valueOf(total);
-				if (ondone != null) ondone.run(new Pair<>(r, null));
+				if (ondone != null) ondone.accept(new Pair<>(r, null));
 				result.unblockSuccess(r);
 				return null;
 			} catch (DataFormatException e) {
 				error = new IOException("Invalid compressed data after " + inflater.getBytesRead()
 					+ " bytes (" + inflater.getBytesWritten() + " uncompressed)", e);
-				if (ondone != null) ondone.run(new Pair<>(null, error));
+				if (ondone != null) ondone.accept(new Pair<>(null, error));
 				result.error(error);
 			}
 			return null;
@@ -476,7 +476,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	}
 
 	@Override
-	public AsyncWork<Integer, IOException> readFullyAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readFullyAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		return operation(IOUtil.readFullyAsync(this, buffer, ondone));
 	}
 
@@ -487,7 +487,7 @@ public class GZipReadable extends ConcurrentCloseable implements IO.Readable {
 	}
 
 	@Override
-	public AsyncWork<Long, IOException> skipAsync(long n, RunnableWithParameter<Pair<Long, IOException>> ondone) {
+	public AsyncSupplier<Long, IOException> skipAsync(long n, Consumer<Pair<Long, IOException>> ondone) {
 		return operation(IOUtil.skipAsyncByReading(this, n, ondone));
 	}
 	

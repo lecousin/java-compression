@@ -6,18 +6,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.zip.InflaterInputStream;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 
 import net.lecousin.framework.collections.ArrayUtil;
 import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.io.FileIO;
@@ -25,6 +19,11 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.SimpleBufferedWritable;
 import net.lecousin.framework.mutable.Mutable;
 import net.lecousin.framework.mutable.MutableInteger;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
 @RunWith(Parameterized.class)
 public class TestLZMA2Writable extends LCCoreAbstractTest {
@@ -42,8 +41,7 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 	private byte[] testBuf;
 	private int nbBuf;
 	
-	@SuppressWarnings("resource")
-	@Test(timeout=120000)
+	@Test
 	public void testCompressSyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_lzma2_writable");
 		tmp.deleteOnExit();
@@ -59,8 +57,7 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 		checkFile(tmp);
 	}
 	
-	@Test(timeout=120000)
-	@SuppressWarnings("resource")
+	@Test
 	public void testCompressAsyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
 		tmp.deleteOnExit();
@@ -69,13 +66,13 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 		LZMA2Options options = new LZMA2Options(LZMA2Options.PRESET_DEFAULT);
 		LZMA2Writable out = new LZMA2Writable(bout, options);
 		MutableInteger nb = new MutableInteger(0);
-		SynchronizationPoint<Exception> done = new SynchronizationPoint<>();
-		Mutable<AsyncWork<Integer, IOException>> write = new Mutable<>(null);
+		Async<Exception> done = new Async<>();
+		Mutable<AsyncSupplier<Integer, IOException>> write = new Mutable<>(null);
 		if (nbBuf > 0)
 			write.set(out.writeAsync(ByteBuffer.wrap(testBuf)));
 		else
-			write.set(new AsyncWork<>(Integer.valueOf(0), null));
-		write.get().listenInline(new Runnable() {
+			write.set(new AsyncSupplier<>(Integer.valueOf(0), null));
+		write.get().onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (write.get().hasError()) {
@@ -88,11 +85,11 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 				}
 				if (nb.inc() < nbBuf) {
 					write.set(out.writeAsync(ByteBuffer.wrap(testBuf)));
-					write.get().listenInline(this);
+					write.get().onDone(this);
 					return;
 				}
-				ISynchronizationPoint<IOException> finish = out.finishAsync();
-				finish.listenInline(new Runnable() {
+				IAsync<IOException> finish = out.finishAsync();
+				finish.onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (finish.hasError()) {
@@ -118,7 +115,6 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 		out.close();
 	}
 	
-	@SuppressWarnings("resource")
 	private void checkFile(File f) throws IOException {
 		FileInputStream fin = new FileInputStream(f);
 		org.tukaani.xz.LZMA2Options options = new org.tukaani.xz.LZMA2Options(org.tukaani.xz.LZMA2Options.PRESET_DEFAULT);

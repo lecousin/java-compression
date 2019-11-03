@@ -2,18 +2,18 @@ package net.lecousin.compression.gzip;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 import java.util.zip.CRC32;
 
 import net.lecousin.compression.deflate.DeflateWritable;
 import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.RunnableWithParameter;
 
 /**
  * GZip compression.
@@ -27,11 +27,11 @@ public class GZipWritable extends DeflateWritable {
 		crc.reset();
 	}
 	
-	private SynchronizationPoint<IOException> writeHeader = new SynchronizationPoint<>();
+	private Async<IOException> writeHeader = new Async<>();
 	private CRC32 crc = new CRC32();
 	
 	@Override
-	public ISynchronizationPoint<IOException> canStartWriting() {
+	public IAsync<IOException> canStartWriting() {
 		return writeHeader;
 	}
 
@@ -45,21 +45,21 @@ public class GZipWritable extends DeflateWritable {
 	}
 
 	@Override
-	public AsyncWork<Integer, IOException> writeAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> writeAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		if (writeHeader.hasError()) {
-			if (ondone != null) ondone.run(new Pair<>(null, writeHeader.getError()));
-			return new AsyncWork<>(null, writeHeader.getError());
+			if (ondone != null) ondone.accept(new Pair<>(null, writeHeader.getError()));
+			return new AsyncSupplier<>(null, writeHeader.getError());
 		}
-		if (!writeHeader.isUnblocked()) {
-			AsyncWork<Integer, IOException> result = new AsyncWork<>();
-			writeHeader.listenInline(() -> {
-				writeAsync(buffer, ondone).listenInline(result);
+		if (!writeHeader.isDone()) {
+			AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
+			writeHeader.onDone(() -> {
+				writeAsync(buffer, ondone).forward(result);
 			});
 			return operation(result);
 		}
 		int initPos = buffer.position();
-		AsyncWork<Integer, IOException> write = super.writeAsync(buffer, null);
-		AsyncWork<Integer, IOException> result = new AsyncWork<>();
+		AsyncSupplier<Integer, IOException> write = super.writeAsync(buffer, null);
+		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
 		operation(new Task.Cpu<Void, NoException>("Update GZip CRC", getPriority()) {
 			@Override
 			public Void run() {
@@ -101,21 +101,21 @@ public class GZipWritable extends DeflateWritable {
 	}
 
 	@Override
-	public ISynchronizationPoint<IOException> finishAsync() {
-		SynchronizationPoint<IOException> result = new SynchronizationPoint<>();
+	public IAsync<IOException> finishAsync() {
+		Async<IOException> result = new Async<>();
 		if (writeHeader.hasError()) {
 			result.error(writeHeader.getError());
 			return result;
 		}
-		if (!writeHeader.isUnblocked()) {
-			writeHeader.listenInline(() -> {
+		if (!writeHeader.isDone()) {
+			writeHeader.onDone(() -> {
 				if (writeHeader.hasError()) result.error(writeHeader.getError());
-				else finishAsync().listenInline(result);
+				else finishAsync().onDone(result);
 			});
 			return operation(result);
 		}
-		ISynchronizationPoint<IOException> finish = super.finishAsync();
-		finish.listenInline(() -> {
+		IAsync<IOException> finish = super.finishAsync();
+		finish.onDone(() -> {
 			if (finish.hasError()) result.error(finish.getError());
 			else if (finish.isCancelled()) result.cancel(finish.getCancelEvent());
 			else new Task.Cpu<Void, NoException>("Write GZip trailer", getPriority()) {
@@ -124,7 +124,7 @@ public class GZipWritable extends DeflateWritable {
 					byte[] trailer = new byte[8];
 					DataUtil.writeUnsignedIntegerLittleEndian(trailer, 0, (int)crc.getValue());
 					DataUtil.writeUnsignedIntegerLittleEndian(trailer, 4, deflater.getTotalIn());
-					output.writeAsync(ByteBuffer.wrap(trailer)).listenInline(result);
+					output.writeAsync(ByteBuffer.wrap(trailer)).onDone(result);
 					return null;
 				}
 			}.start();
@@ -150,7 +150,7 @@ public class GZipWritable extends DeflateWritable {
 				header[8] = 0;
 				// OS
 				header[9] = 0;
-				output.writeAsync(ByteBuffer.wrap(header)).listenInline(writeHeader);
+				output.writeAsync(ByteBuffer.wrap(header)).onDone(writeHeader);
 				return null;
 			}
 		}.start();

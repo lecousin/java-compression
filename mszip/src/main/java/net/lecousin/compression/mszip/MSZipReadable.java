@@ -2,20 +2,20 @@ package net.lecousin.compression.mszip;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 import java.util.zip.Inflater;
 
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
 import net.lecousin.framework.concurrent.Threading;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.RunnableWithParameter;
 
 /**
  * MSZip format is composed of blocks of maximum 32K of uncompressed data, starting with a 2 bytes signature (CK), 
@@ -24,12 +24,12 @@ import net.lecousin.framework.util.RunnableWithParameter;
  * The MSZip compression cannot be used as an usual compression method, because it relies on <i>blocks</i> but
  * does not allow to detect blocks, so it needs to be encapsulated in a format that delimits blocks of data.
  */
-public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Buffered {
+public class MSZipReadable extends ConcurrentCloseable<IOException> implements IO.Readable.Buffered {
 	
 	/** Interface to implement in order to provide block of compressed data. */
 	public static interface BlockProvider {
 		/** Return the next block of data, or null if this is the end. */
-		AsyncWork<ByteBuffer,IOException> readNextBlock();
+		AsyncSupplier<ByteBuffer,IOException> readNextBlock();
 		
 		/** Description. */
 		String getSourceDescription();
@@ -38,7 +38,7 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 		IO getWrappedIO();
 		
 		/** Close. */
-		ISynchronizationPoint<?> closeAsync();
+		IAsync<IOException> closeAsync();
 	}
 
 	/** MSZipReadable with a known uncompressed size. */
@@ -52,8 +52,8 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 		private long uncompressedSize;
 		
 		@Override
-		public AsyncWork<Long, IOException> getSizeAsync() {
-			return new AsyncWork<>(Long.valueOf(uncompressedSize), null);
+		public AsyncSupplier<Long, IOException> getSizeAsync() {
+			return new AsyncSupplier<>(Long.valueOf(uncompressedSize), null);
 		}
 		
 		@Override
@@ -81,19 +81,19 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 		public BlockUncompressor(int blockIndex) {
 			inflater = new Inflater(true);
 			read = input.readNextBlock();
-			dataReady = new SynchronizationPoint<>();
+			dataReady = new Async<>();
 			this.blockIndex = blockIndex;
 			uncompressed = new byte[32768];
-			read.listenAsync(new StartUncompress(), true);
+			read.thenStart(new StartUncompress(), true);
 		}
 		
 		private int blockIndex;
 		private Inflater inflater;
-		private AsyncWork<ByteBuffer,IOException> read;
+		private AsyncSupplier<ByteBuffer,IOException> read;
 		private byte[] uncompressed;
 		private int pos = 0;
 		private int size = 0;
-		private SynchronizationPoint<IOException> dataReady;
+		private Async<IOException> dataReady;
 		
 		private class StartUncompress extends Task.Cpu<Void,NoException> {
 			private StartUncompress() {
@@ -242,28 +242,28 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 	}
 	
 	@Override
-	public AsyncWork<Integer, IOException> readFullySyncIfPossible(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readFullySyncIfPossible(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		int done = 0;
 		do {
 			if (error != null) {
-				if (ondone != null) ondone.run(new Pair<>(null, error));
-				return new AsyncWork<>(null, error);
+				if (ondone != null) ondone.accept(new Pair<>(null, error));
+				return new AsyncSupplier<>(null, error);
 			}
-			if (!uncompress.dataReady.isUnblocked()) {
+			if (!uncompress.dataReady.isDone()) {
 				if (done == 0)
 					return readFullyAsync(buffer, ondone);
-				AsyncWork<Integer, IOException> r = new AsyncWork<>();
+				AsyncSupplier<Integer, IOException> r = new AsyncSupplier<>();
 				int d = done;
 				readFullyAsync(buffer, (res) -> {
 					if (ondone == null) return;
-					if (res.getValue1() == null) ondone.run(res);
+					if (res.getValue1() == null) ondone.accept(res);
 					else {
 						int n = res.getValue1().intValue();
 						if (n < 0) n = d;
 						else n += d;
-						ondone.run(new Pair<>(Integer.valueOf(n), null));
+						ondone.accept(new Pair<>(Integer.valueOf(n), null));
 					}
-				}).listenInline((nb) -> {
+				}).onDone((nb) -> {
 					int n = nb.intValue();
 					if (n < 0) n = d;
 					else n += d;
@@ -278,12 +278,12 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 				uncompress.pos += l;
 				done += l;
 				if (!buffer.hasRemaining())
-					return new AsyncWork<>(Integer.valueOf(done), null);
+					return new AsyncSupplier<>(Integer.valueOf(done), null);
 			}
 			synchronized (this) {
 				// current block is completely read
 				if (nextUncompress == null)
-					return new AsyncWork<>(Integer.valueOf(done > 0 ? done : -1), null);
+					return new AsyncSupplier<>(Integer.valueOf(done > 0 ? done : -1), null);
 				uncompress = nextUncompress;
 				if (!eof)
 					nextUncompress = new BlockUncompressor(uncompress.blockIndex + 1);
@@ -295,7 +295,7 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 	public int readAsync() throws IOException {
 		if (error != null) throw error;
 		// wait for current block to have some data uncompressed
-		if (!uncompress.dataReady.isUnblocked()) return -2;
+		if (!uncompress.dataReady.isDone()) return -2;
 		if (uncompress.pos < uncompress.size)
 			return uncompress.uncompressed[uncompress.pos++] & 0xFF;
 		synchronized (this) {
@@ -310,18 +310,18 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 	}
 	
 	@Override
-	public AsyncWork<Integer, IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		if (error != null) {
-			if (ondone != null) ondone.run(new Pair<>(null, error));
-			return new AsyncWork<>(null, error);
+			if (ondone != null) ondone.accept(new Pair<>(null, error));
+			return new AsyncSupplier<>(null, error);
 		}
 		// wait for current block to have some data uncompressed
-		AsyncWork<Integer, IOException> result = new AsyncWork<>();
-		uncompress.dataReady.listenAsync(new Task.Cpu<Void,NoException>("Read data from MSZip", priority) {
+		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
+		uncompress.dataReady.thenStart(new Task.Cpu<Void,NoException>("Read data from MSZip", priority) {
 			@Override
 			public Void run() {
 				if (error != null) {
-					if (ondone != null) ondone.run(new Pair<>(null, error));
+					if (ondone != null) ondone.accept(new Pair<>(null, error));
 					result.error(error);
 					return null;
 				}
@@ -330,13 +330,13 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 					if (l > buffer.remaining()) l = buffer.remaining();
 					buffer.put(uncompress.uncompressed, uncompress.pos, l);
 					uncompress.pos += l;
-					if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(l), null));
+					if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(l), null));
 					result.unblockSuccess(Integer.valueOf(l));
 					return null;
 				}
 				// current block is completely read
 				if (nextUncompress == null) {
-					if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
+					if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
 					result.unblockSuccess(Integer.valueOf(-1));
 					return null;
 				}
@@ -345,7 +345,7 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 					if (!eof)
 						nextUncompress = new BlockUncompressor(uncompress.blockIndex + 1);
 				}
-				readAsync(buffer, ondone).listenInline(result);
+				readAsync(buffer, ondone).forward(result);
 				return null;
 			}
 		}, true);
@@ -353,29 +353,38 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 	}
 	
 	@Override
-	public AsyncWork<Integer, IOException> readFullyAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readFullyAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		return operation(IOUtil.readFullyAsync(this, buffer, ondone));
 	}
 	
 	@Override
-	public AsyncWork<ByteBuffer, IOException> readNextBufferAsync(RunnableWithParameter<Pair<ByteBuffer, IOException>> ondone) {
-		AsyncWork<ByteBuffer, IOException> result = new AsyncWork<>();
+	public AsyncSupplier<ByteBuffer, IOException> readNextBufferAsync(Consumer<Pair<ByteBuffer, IOException>> ondone) {
+		AsyncSupplier<ByteBuffer, IOException> result = new AsyncSupplier<>();
 		ByteBuffer buffer = ByteBuffer.allocate(32768);
-		AsyncWork<Integer, IOException> read = readAsync(buffer);
-		read.listenInline(new Runnable() {
+		AsyncSupplier<Integer, IOException> read = readAsync(buffer);
+		read.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (read.hasError()) {
-					if (ondone != null) ondone.run(new Pair<>(null, read.getError()));
+					if (ondone != null) ondone.accept(new Pair<>(null, read.getError()));
 					result.error(read.getError());
 					return;
 				}
 				buffer.flip();
-				if (ondone != null) ondone.run(new Pair<>(buffer, null));
+				if (ondone != null) ondone.accept(new Pair<>(buffer, null));
 				result.unblockSuccess(buffer);
 			}
 		});
 		return result;
+	}
+	
+	@Override
+	public ByteBuffer readNextBuffer() throws IOException {
+		ByteBuffer buffer = ByteBuffer.allocate(32768);
+		int nb = readSync(buffer);
+		if (nb <= 0) return null;
+		buffer.flip();
+		return buffer;
 	}
 
 	@Override
@@ -389,7 +398,7 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 	}
 
 	@Override
-	public AsyncWork<Long, IOException> skipAsync(long n, RunnableWithParameter<Pair<Long, IOException>> ondone) {
+	public AsyncSupplier<Long, IOException> skipAsync(long n, Consumer<Pair<Long, IOException>> ondone) {
 		return operation(IOUtil.skipAsyncByReading(this, n, ondone));
 	}
 
@@ -419,17 +428,17 @@ public class MSZipReadable extends ConcurrentCloseable implements IO.Readable.Bu
 	}
 
 	@Override
-	public ISynchronizationPoint<IOException> canStartReading() {
+	public IAsync<IOException> canStartReading() {
 		return uncompress.dataReady;
 	}
 
 	@Override
-	protected ISynchronizationPoint<?> closeUnderlyingResources() {
+	protected IAsync<IOException> closeUnderlyingResources() {
 		return input.closeAsync();
 	}
 	
 	@Override
-	protected void closeResources(SynchronizationPoint<Exception> ondone) {
+	protected void closeResources(Async<IOException> ondone) {
 		input = null;
 		ondone.unblock();
 	}

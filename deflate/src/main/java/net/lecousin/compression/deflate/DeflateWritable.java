@@ -2,27 +2,27 @@ package net.lecousin.compression.deflate;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 import java.util.zip.Deflater;
 
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
 import net.lecousin.framework.concurrent.Threading;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.LimitWriteOperations;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.RunnableWithParameter;
 
 /**
  * Deflate compression: wrap a Writable and compress data in it.
  * One of the method finishSync or finishAsync must be called when no more data needs to be compressed.
  * It uses the {@link Deflater} provided by Java.
  */
-public class DeflateWritable extends ConcurrentCloseable implements IO.Writable {
+public class DeflateWritable extends ConcurrentCloseable<IOException> implements IO.Writable {
 	
 	/** Constructor. */
 	public DeflateWritable(IO.Writable output, byte priority, int level, boolean nowrap, int maxPendingWrite) {
@@ -36,7 +36,7 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 	protected byte priority;
 	protected Deflater deflater;
 	protected LimitWriteOperations writeOps;
-	protected SynchronizationPoint<IOException> finishing = null;
+	protected Async<IOException> finishing = null;
 
 	@Override
 	public TaskManager getTaskManager() {
@@ -58,20 +58,20 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 	public void setPriority(byte priority) { this.priority = priority; }
 	
 	@Override
-	protected ISynchronizationPoint<?> closeUnderlyingResources() {
+	protected IAsync<IOException> closeUnderlyingResources() {
 		if (finishing == null)
 			finishAsync();
-		if (finishing.isUnblocked())
+		if (finishing.isDone())
 			return output.closeAsync();
-		SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
-		finishing.listenInlineSP(() -> {
-			output.closeAsync().listenInline(sp);
+		Async<IOException> sp = new Async<>();
+		finishing.onDone(() -> {
+			output.closeAsync().onDone(sp);
 		}, sp);
 		return sp;
 	}
 	
 	@Override
-	protected void closeResources(SynchronizationPoint<Exception> ondone) {
+	protected void closeResources(Async<IOException> ondone) {
 		output = null;
 		deflater = null;
 		writeOps = null;
@@ -79,8 +79,8 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 	}
 	
 	@Override
-	public ISynchronizationPoint<IOException> canStartWriting() {
-		return new SynchronizationPoint<>(true);
+	public IAsync<IOException> canStartWriting() {
+		return new Async<>(true);
 	}
 	
 	@Override
@@ -95,7 +95,7 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 			deflater.setInput(buf);
 		}
 		byte[] writeBuf = new byte[len > 128 * 1024 ? 128 * 1024 : len];
-		AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
+		AsyncSupplier<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
 		if (lastWrite != null) {
 			lastWrite.blockException(0);
 		}
@@ -108,7 +108,7 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 	}
 	
 	@Override
-	public AsyncWork<Integer,IOException> writeAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer,IOException>> ondone) {
+	public AsyncSupplier<Integer,IOException> writeAsync(ByteBuffer buffer, Consumer<Pair<Integer,IOException>> ondone) {
 		Task<Integer,IOException> task = new Task.Cpu<Integer,IOException>("Compressing data using deflate", priority, ondone) {
 			@Override
 			public Integer run() throws IOException {
@@ -141,9 +141,9 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 			finishing.blockException(0);
 			return;
 		}
-		finishing = new SynchronizationPoint<>();
+		finishing = new Async<>();
 		try {
-			AsyncWork<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
+			AsyncSupplier<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
 			if (lastWrite != null) {
 				lastWrite.blockException(0);
 			}
@@ -164,13 +164,13 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 	}
 	
 	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */
-	public ISynchronizationPoint<IOException> finishAsync() {
+	public IAsync<IOException> finishAsync() {
 		if (finishing != null) return finishing;
-		finishing = new SynchronizationPoint<>();
+		finishing = new Async<>();
 		Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Finishing zip compression", priority) {
 			@Override
 			public Void run() {
-				AsyncWork<Integer, IOException> lastWrite = null;
+				AsyncSupplier<Integer, IOException> lastWrite = null;
 				deflater.finish();
 				if (!deflater.finished()) {
 					do {
@@ -186,7 +186,7 @@ public class DeflateWritable extends ConcurrentCloseable implements IO.Writable 
 				}
 				if (lastWrite == null) lastWrite = writeOps.getLastPendingOperation();
 				if (lastWrite != null)
-					lastWrite.listenInline(finishing);
+					lastWrite.onDone(finishing);
 				else
 					finishing.unblock();
 				return null;
