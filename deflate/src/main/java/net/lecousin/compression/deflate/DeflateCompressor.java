@@ -56,6 +56,7 @@ public class DeflateCompressor {
 	}
 	
 	private static class Compress extends Task.Cpu<Void,Exception> {
+		@SuppressWarnings("squid:S00107") // 8 parameters
 		private Compress(
 			Readable input, Writable output, AsyncSupplier<Integer,IOException> readTask, byte[] readBuf,
 			Deflater delfater, LimitWriteOperationsReuseBuffers limit, byte priority, Async<Exception> end
@@ -90,75 +91,82 @@ public class DeflateCompressor {
 				throw readTask.getError();
 			}
 			try {
-				// compress data
-				int nb = readTask.getResult().intValue();
-				int pos = 0;
-				ByteBuffer writeBuf = limit.getBuffer();
-				if (nb <= 0) {
-					// end of data
-					deflater.finish();
-					while (!deflater.finished()) {
-						if (writeBuf == null) writeBuf = limit.getBuffer();
-						nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity() - pos);
-						if (nb <= 0) break;
-						pos += nb;
-						if (pos == writeBuf.capacity()) {
-							writeCompressedData(writeBuf, pos);
-							pos = 0;
-							writeBuf = null;
-						}
-					}
-					deflater.end();
-					deflater = null;
-				} else {
-					deflater.setInput(readBuf, 0, nb);
-					while (!deflater.needsInput() && !end.isCancelled()) {
-						if (writeBuf == null) writeBuf = limit.getBuffer();
-						nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity() - pos);
-						if (nb <= 0) break;
-						pos += nb;
-						if (pos == writeBuf.capacity()) {
-							writeCompressedData(writeBuf, pos);
-							pos = 0;
-							writeBuf = null;
-						}
-					}
-				}
-				if (end.isCancelled()) return null;
-				if (deflater != null && !deflater.finished()) {
-					// write compressed data
-					if (pos > 0)
-						writeCompressedData(writeBuf, pos);
-					else if (writeBuf != null)
-						limit.freeBuffer(writeBuf);
-					// next read
-					AsyncSupplier<Integer,IOException> task = input.readAsync(ByteBuffer.wrap(readBuf));
-					task.thenStart(new Compress(input, output, task, readBuf, deflater, limit, getPriority(), end), true);
-				} else {
-					// write compressed data
-					AsyncSupplier<Integer, IOException> write = null;
-					if (pos > 0)
-						write = writeCompressedData(writeBuf, pos);
-					else {
-						if (writeBuf != null)
-							limit.freeBuffer(writeBuf);
-						write = limit.getLastPendingOperation();
-					}
-					if (write == null)
-						end.unblock();
-					else
-						write.onDone(new Runnable() {
-							@Override
-							public void run() {
-								end.unblock();
-							}
-						});
-				}
+				compress();
 			} catch (Exception e) {
 				end.error(e);
 				throw e;
 			}
 			return null;
+		}
+		
+		private void compress() throws IOException {
+			// compress data
+			int nb = readTask.getResult().intValue();
+			int pos = 0;
+			ByteBuffer writeBuf = limit.getBuffer();
+			if (nb <= 0) {
+				// end of data
+				deflater.finish();
+				while (!deflater.finished()) {
+					if (writeBuf == null) writeBuf = limit.getBuffer();
+					nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity() - pos);
+					if (nb <= 0) break;
+					pos += nb;
+					if (pos == writeBuf.capacity()) {
+						writeCompressedData(writeBuf, pos);
+						pos = 0;
+						writeBuf = null;
+					}
+				}
+				deflater.end();
+				deflater = null;
+			} else {
+				deflater.setInput(readBuf, 0, nb);
+				while (!deflater.needsInput() && !end.isCancelled()) {
+					if (writeBuf == null) writeBuf = limit.getBuffer();
+					nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity() - pos);
+					if (nb <= 0) break;
+					pos += nb;
+					if (pos == writeBuf.capacity()) {
+						writeCompressedData(writeBuf, pos);
+						pos = 0;
+						writeBuf = null;
+					}
+				}
+			}
+			if (end.isCancelled()) return;
+			if (deflater != null && !deflater.finished()) {
+				writeAndContinue(pos, writeBuf);
+			} else {
+				writeAndEnd(pos, writeBuf);
+			}
+		}
+		
+		private void writeAndContinue(int pos, ByteBuffer writeBuf) throws IOException {
+			// write compressed data
+			if (pos > 0)
+				writeCompressedData(writeBuf, pos);
+			else if (writeBuf != null)
+				limit.freeBuffer(writeBuf);
+			// next read
+			AsyncSupplier<Integer,IOException> task = input.readAsync(ByteBuffer.wrap(readBuf));
+			task.thenStart(new Compress(input, output, task, readBuf, deflater, limit, getPriority(), end), true);
+		}
+		
+		private void writeAndEnd(int pos, ByteBuffer writeBuf) throws IOException {
+			// write compressed data
+			AsyncSupplier<Integer, IOException> write = null;
+			if (pos > 0)
+				write = writeCompressedData(writeBuf, pos);
+			else {
+				if (writeBuf != null)
+					limit.freeBuffer(writeBuf);
+				write = limit.getLastPendingOperation();
+			}
+			if (write == null)
+				end.unblock();
+			else
+				write.onDone(end::unblock);
 		}
 		
 		private AsyncSupplier<Integer,IOException> writeCompressedData(ByteBuffer writeBuf, int nb) throws IOException {

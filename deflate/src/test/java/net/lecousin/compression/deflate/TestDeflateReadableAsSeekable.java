@@ -3,6 +3,7 @@ package net.lecousin.compression.deflate;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.zip.DeflaterOutputStream;
 
@@ -21,16 +22,31 @@ import org.junit.runners.Parameterized.Parameters;
 @RunWith(LCConcurrentRunner.Parameterized.class) @org.junit.runners.Parameterized.UseParametersRunnerFactory(LCConcurrentRunner.ConcurrentParameterizedRunnedFactory.class)
 public class TestDeflateReadableAsSeekable extends TestReadableSeekable {
 
-	@Parameters(name = "nbBuf = {2}")
+	@Parameters(name = "nbBuf = {2}, efficient = {3}")
 	public static Collection<Object[]> parameters() {
-		return TestIO.UsingGeneratedTestFiles.generateTestCases(false);
-	}
-	
-	public TestDeflateReadableAsSeekable(File testFile, byte[] testBuf, int nbBuf) {
-		super(testFile, testBuf, nbBuf);
+		Collection<Object[]> params = TestIO.UsingGeneratedTestFiles.generateTestCases(true);
+		ArrayList<Object[]> newParams = new ArrayList<>(params.size());
+		for (Object[] a : params) {
+			Object[] b = new Object[a.length + 1];
+			System.arraycopy(a, 0, b, 0, a.length);
+			b[a.length] = Boolean.TRUE;
+			newParams.add(b);
+			b = new Object[a.length + 1];
+			System.arraycopy(a, 0, b, 0, a.length);
+			b[a.length] = Boolean.FALSE;
+			newParams.add(b);
+		}
+		return newParams;
 	}
 
-	@SuppressWarnings("resource")
+	
+	public TestDeflateReadableAsSeekable(File testFile, byte[] testBuf, int nbBuf, boolean efficient) {
+		super(testFile, testBuf, nbBuf);
+		this.efficient = efficient;
+	}
+	
+	private boolean efficient;
+
 	@Override
 	protected IO.Readable.Seekable createReadableSeekableFromFile(FileIO.ReadOnly file, long fileSize) throws Exception {
 		File tmp = File.createTempFile("test", "_" + fileSize + "_deflate");
@@ -50,9 +66,9 @@ public class TestDeflateReadableAsSeekable extends TestReadableSeekable {
 		fout.close();
 		file.closeAsync();
 		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.PRIORITY_NORMAL);
-		SimpleBufferedReadable bin = new SimpleBufferedReadable(fin, 8192);
+		SimpleBufferedReadable bin = new SimpleBufferedReadable(fin, efficient ? 8192 : fileSize < 128000 ? 2 : 16);
 		DeflateReadable.SizeKnown gin = new DeflateReadable.SizeKnown(bin, Task.PRIORITY_NORMAL, fileSize, false);
-		return new ReadableToSeekable(gin, 4096);
+		return new ReadableToSeekable(gin, efficient ? 4096 : fileSize < 128000 ? 8 : 64);
 	}
 	
 }

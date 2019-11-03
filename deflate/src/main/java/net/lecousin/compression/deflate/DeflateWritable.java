@@ -64,9 +64,7 @@ public class DeflateWritable extends ConcurrentCloseable<IOException> implements
 		if (finishing.isDone())
 			return output.closeAsync();
 		Async<IOException> sp = new Async<>();
-		finishing.onDone(() -> {
-			output.closeAsync().onDone(sp);
-		}, sp);
+		finishing.onDone(() -> output.closeAsync().onDone(sp), sp);
 		return sp;
 	}
 	

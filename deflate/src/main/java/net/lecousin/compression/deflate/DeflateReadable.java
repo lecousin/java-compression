@@ -100,10 +100,8 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	@Override
 	public AsyncSupplier<Integer,IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer,IOException>> ondone) {
 		if (isClosing() || isClosed()) return new AsyncSupplier<>(null, null, new CancelException("Deflate stream closed"));
-		if (reachEOF) {
-			if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
-			return new AsyncSupplier<Integer,IOException>(Integer.valueOf(-1), null);
-		}
+		if (reachEOF)
+			return IOUtil.success(Integer.valueOf(-1), ondone);
 		if (readTask != null && !readTask.isDone()) {
 			Task<Integer,IOException> task = new Task.Cpu<Integer,IOException>(
 				"Waiting for previous uncompression task", priority, ondone
@@ -134,12 +132,12 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 		}
 		if (inflater.finished()) {
 			reachEOF = true;
-			if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
-			return new AsyncSupplier<Integer,IOException>(Integer.valueOf(-1), null);
+			return IOUtil.success(Integer.valueOf(-1), ondone);
 		}
 		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
 		fillAsync(buffer, result, ondone);
-		return readTask = operation(result);
+		readTask = operation(result);
+		return readTask;
 	}
 	
 	@Override
@@ -202,8 +200,7 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 					if (total > 0) break;
 					if (inflater.finished() || inflater.needsDictionary()) {
 						reachEOF = true;
-						if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
-						result.unblockSuccess(Integer.valueOf(-1));
+						IOUtil.success(Integer.valueOf(-1), result, ondone);
 						return;
 					}
 					if (inflater.needsInput()) {
@@ -217,14 +214,10 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 				buffer.put(b, 0, total);
 			else
 				buffer.position(off + total - buffer.arrayOffset());
-			Integer r = Integer.valueOf(total);
-			if (ondone != null) ondone.accept(new Pair<>(r, null));
-			result.unblockSuccess(r);
+			IOUtil.success(Integer.valueOf(total), result, ondone);
 		} catch (DataFormatException e) {
-			IOException err = new IOException("Inflate error after " + inflater.getBytesRead()
-				+ " compressed bytes read, and " + inflater.getBytesWritten() + " uncompressed bytes written", e);
-			if (ondone != null) ondone.accept(new Pair<>(null, err));
-			result.error(err);
+			IOUtil.error(new IOException("Inflate error after " + inflater.getBytesRead() + " compressed bytes read, and "
+				+ inflater.getBytesWritten() + " uncompressed bytes written", e), result, ondone);
 		}
 	}
 	
@@ -244,23 +237,14 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 		) {
 			@Override
 			public Void run() {
-				if (read.hasError()) {
-					if (ondone != null) ondone.accept(new Pair<>(null, read.getError()));
-					result.error(read.getError());
-					return null;
-				}
-				if (read.isCancelled()) {
-					result.cancel(read.getCancelEvent());
+				if (!read.isSuccessful()) {
+					IOUtil.notSuccess(read, result, ondone);
 					return null;
 				}
 				int len = read.getResult().intValue();
 				if (len <= 0) {
 					if (isClosing() || isClosed()) result.cancel(new CancelException("Deflate stream closed"));
-					else {
-						IOException err = new IOException("Unexpected end of zip input");
-						if (ondone != null) ondone.accept(new Pair<>(null, err));
-						result.error(err);
-					}
+					else IOUtil.error(new IOException("Unexpected end of zip input"), result, ondone);
 					return null;
 				}
 				inflater.setInput(readBuf.array(), 0, len);
