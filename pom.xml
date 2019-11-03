@@ -11,6 +11,10 @@
   	<version>20191012.2</version>
   </parent>
   
+  <properties>
+  	<sonar.sourceEncoding>UTF-8</sonar.sourceEncoding>
+  </properties>
+  
   <modules>
     <module>deflate</module>
     <module>gzip</module>

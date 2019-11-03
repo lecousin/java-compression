@@ -4,6 +4,12 @@ jdk:
   - openjdk8
 dist: trusty
 
+addons:
+  sonarcloud:
+    organization: "lecousin"
+    token:
+      secure: gGDNFQVeKAFqKX+GlY7KC/eeJerFLrbosOiM5ZZj9cG82tUOrwI9MAT+eR5RstUVAUtH1oM8Hhi3Gz2egK4YGuodeCO07p0LsWHvcyfAdjPup9p62OmwIuqZY1D8SUo7VYqzMUaLhRyzf57qEEmx0xLyvIZRyj8b5qw29pUxPqnT97bbL2yZ/1KYrgwvpHF5ha+ROLwMcvsXlMhiVIBbWrAfas+F4I3kf7OPDkAxz2bxjPAjeH+QKAliJkXC+dIOxMC8rAq7V3hvCZelQ3begCpnIVadn9Dp/f56NUkhVNUrbtzYh5hpImPQoVvkHrI294BX+TIxtjo6uh6ELlNO1Pjt33NRDAi/FOrVFvjnT8+7bDji/XXA8o0oOX5xpIZeFTk4sAFJtsm+ScSpLIo5KSU29t3Guu8rrqGKL7UW5S3zv3qChhRCF9XjpszZLtKo15uFWIg1a7kYotJsWEI4ooSJEtGB2v1B+cCTZr+KlF6sIY5ATcJNKBBiHonr6Q1jqeoliaDo4zsKvBef7JG0/NX6qwf6CVJl0FgjBc74MlEP2TvJ7eTAnuiYLxi+PHCeOFKS2vuF6MCkT2ulQWkxmfpzCyk9ewWqfVJAwbkygiQcVcbADw8HUp08VwAbGtKYpH7O6qjzeSw/F6Gv37lqH5d0fT0cICVDXgWCg86iDMU=
+
 script: mvn test verify install sonar:sonar -Dsonar.projectKey=lecousin_java-compression -B 
   
 after_success:
