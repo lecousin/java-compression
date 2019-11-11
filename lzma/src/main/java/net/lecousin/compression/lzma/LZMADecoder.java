@@ -1,7 +1,6 @@
 package net.lecousin.compression.lzma;
 
 import java.io.IOException;
-import net.lecousin.compression.lzma.rangecoder.RangeDecoder;
 
 final class LZMADecoder extends LZMACoder {
     private final LZDecoder lz;

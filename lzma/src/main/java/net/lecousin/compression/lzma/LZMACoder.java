@@ -1,7 +1,5 @@
 package net.lecousin.compression.lzma;
 
-import net.lecousin.compression.lzma.rangecoder.RangeCoder;
-
 abstract class LZMACoder {
     static final int POS_STATES_MAX = 1 << 4;
 
@@ -20,11 +18,11 @@ abstract class LZMACoder {
     static final int ALIGN_SIZE = 1 << ALIGN_BITS;
     static final int ALIGN_MASK = ALIGN_SIZE - 1;
 
-    static final int REPS = 4;
+    static final int NB_REPS = 4;
 
     final int posMask;
 
-    final int[] reps = new int[REPS];
+    final int[] reps = new int[NB_REPS];
     final State state = new State();
 
     final short[][] isMatch = new short[State.STATES][POS_STATES_MAX];
@@ -79,7 +77,7 @@ abstract class LZMACoder {
     }
 
 
-    abstract class LiteralCoder {
+    abstract static class LiteralCoder {
         private final int lc;
         private final int literalPosMask;
 
@@ -95,7 +93,7 @@ abstract class LZMACoder {
         }
 
 
-        abstract class LiteralSubcoder {
+        abstract static class LiteralSubcoder {
             final short[] probs = new short[0x300];
 
             void reset() {
@@ -105,7 +103,7 @@ abstract class LZMACoder {
     }
 
 
-    abstract class LengthCoder {
+    abstract static class LengthCoder {
         static final int LOW_SYMBOLS = 1 << 3;
         static final int MID_SYMBOLS = 1 << 3;
         static final int HIGH_SYMBOLS = 1 << 8;

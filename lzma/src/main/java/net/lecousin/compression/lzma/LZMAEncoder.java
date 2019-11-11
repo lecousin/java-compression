@@ -3,7 +3,6 @@ package net.lecousin.compression.lzma;
 import java.io.IOException;
 
 import net.lecousin.compression.lzma.LZMA2Options.Mode;
-import net.lecousin.compression.lzma.rangecoder.RangeEncoder;
 import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.memory.IntArrayCache;
 
@@ -96,9 +95,10 @@ abstract class LZMAEncoder extends LZMACoder {
                                              dictSize, extraSizeBefore,
                                              niceLen, mf, depthLimit,
                                              byteArrayCache, intArrayCache);
+            default:
+                throw new IllegalArgumentException();
         }
 
-        throw new IllegalArgumentException();
     }
 
     public void putArraysToCache(ByteArrayCache arrayCache, IntArrayCache intArrayCache) {
@@ -287,7 +287,7 @@ abstract class LZMAEncoder extends LZMACoder {
         } else {
             // Some type of match
             rc.encodeBit(isMatch[state.get()], posState, 1);
-            if (back < REPS) {
+            if (back < NB_REPS) {
                 // Repeated match i.e. the same distance
                 // has been used earlier.
                 assert lz.getMatchLen(-readAhead, reps[back], len) == len;
@@ -295,9 +295,9 @@ abstract class LZMAEncoder extends LZMACoder {
                 encodeRepMatch(back, len, posState);
             } else {
                 // Normal match
-                assert lz.getMatchLen(-readAhead, back - REPS, len) == len;
+                assert lz.getMatchLen(-readAhead, back - NB_REPS, len) == len;
                 rc.encodeBit(isRep, state.get(), 0);
-                encodeMatch(back - REPS, len, posState);
+                encodeMatch(back - NB_REPS, len, posState);
             }
         }
 

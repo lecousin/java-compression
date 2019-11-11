@@ -187,8 +187,11 @@ public class LZMA2Options implements FilterOptions {
         } else {
             mode = Mode.NORMAL;
             mf = MF_BT4;
-            niceLen = (preset == 4) ? 16 : (preset == 5) ? 32 : 64;
             depthLimit = 0;
+            if (preset == 4)
+            	niceLen = 16;
+            else
+            	niceLen = (preset == 5) ? 32 : 64;
         }
     }
 
@@ -530,6 +533,7 @@ public class LZMA2Options implements FilterOptions {
     }
 
     @Override
+    @SuppressWarnings("squid:S2975")
 	public Object clone() {
         try {
             return super.clone();

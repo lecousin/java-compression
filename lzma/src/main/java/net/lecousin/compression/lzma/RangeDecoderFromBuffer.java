@@ -1,18 +1,16 @@
-package net.lecousin.compression.lzma.rangecoder;
+package net.lecousin.compression.lzma;
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import net.lecousin.compression.lzma.CorruptedInputException;
-import net.lecousin.compression.lzma.TaskUtil;
 import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.memory.ByteArrayCache;
 
-public final class RangeDecoderFromBuffer extends RangeDecoder {
+final class RangeDecoderFromBuffer extends RangeDecoder {
     private static final int INIT_SIZE = 5;
 
     private final byte[] buf;

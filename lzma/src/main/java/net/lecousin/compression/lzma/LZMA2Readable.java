@@ -6,7 +6,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.util.function.Consumer;
 
-import net.lecousin.compression.lzma.rangecoder.RangeDecoderFromBuffer;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.TaskManager;
 import net.lecousin.framework.concurrent.Threading;

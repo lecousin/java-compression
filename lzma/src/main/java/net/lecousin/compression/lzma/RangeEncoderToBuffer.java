@@ -1,4 +1,4 @@
-package net.lecousin.compression.lzma.rangecoder;
+package net.lecousin.compression.lzma;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -7,7 +7,7 @@ import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.memory.ByteArrayCache;
 
-public final class RangeEncoderToBuffer extends RangeEncoder {
+final class RangeEncoderToBuffer extends RangeEncoder {
     private final byte[] buf;
     private int bufPos;
 

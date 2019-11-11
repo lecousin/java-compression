@@ -10,7 +10,7 @@ import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
 
-public final class TaskUtil {
+final class TaskUtil {
 	
 	private TaskUtil() {
 		// no instance

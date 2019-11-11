@@ -143,6 +143,10 @@ final class HC4 extends LZEncoder {
 
         // Long enough match wasn't found so easily. Look for better matches
         // from the hash chain.
+        return getMatchesFromHashChain(lenBest, currentMatch, matchLenLimit, niceLenLimit);
+    }
+    
+    private Matches getMatchesFromHashChain(int lenBest, int currentMatch, int matchLenLimit, int niceLenLimit) {
         if (lenBest < 3)
             lenBest = 3;
 

@@ -1,8 +1,8 @@
-package net.lecousin.compression.lzma.rangecoder;
+package net.lecousin.compression.lzma;
 
 import java.io.IOException;
 
-public abstract class RangeEncoder extends RangeCoder {
+abstract class RangeEncoder extends RangeCoder {
     private static final int MOVE_REDUCING_BITS = 4;
     private static final int BIT_PRICE_SHIFT_BITS = 4;
 

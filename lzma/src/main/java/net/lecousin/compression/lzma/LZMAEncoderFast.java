@@ -1,6 +1,5 @@
 package net.lecousin.compression.lzma;
 
-import net.lecousin.compression.lzma.rangecoder.RangeEncoder;
 import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.memory.IntArrayCache;
 
@@ -35,6 +34,7 @@ final class LZMAEncoderFast extends LZMAEncoder {
     }
 
     @Override
+    @SuppressWarnings("squid:S3776") // complexity
 	int getNextSymbol() {
         // Get the matches for the next byte unless readAhead indicates
         // that we already got the new matches during the previous call
@@ -55,7 +55,7 @@ final class LZMAEncoderFast extends LZMAEncoder {
         // Look for a match from the previous four match distances.
         int bestRepLen = 0;
         int bestRepIndex = 0;
-        for (int rep = 0; rep < REPS; ++rep) {
+        for (int rep = 0; rep < NB_REPS; ++rep) {
             int len = lz.getMatchLen(reps[rep], avail);
             if (len < MATCH_LEN_MIN)
                 continue;
@@ -82,7 +82,7 @@ final class LZMAEncoderFast extends LZMAEncoder {
             mainDist = matches.dist[matches.count - 1];
 
             if (mainLen >= niceLen) {
-                back = mainDist + REPS;
+                back = mainDist + NB_REPS;
                 skip(mainLen - 1);
                 return mainLen;
             }
@@ -132,11 +132,11 @@ final class LZMAEncoderFast extends LZMAEncoder {
         }
 
         int limit = Math.max(mainLen - 1, MATCH_LEN_MIN);
-        for (int rep = 0; rep < REPS; ++rep)
+        for (int rep = 0; rep < NB_REPS; ++rep)
             if (lz.getMatchLen(reps[rep], limit) == limit)
                 return 1;
 
-        back = mainDist + REPS;
+        back = mainDist + NB_REPS;
         skip(mainLen - 2);
         return mainLen;
     }

@@ -1,6 +1,7 @@
 package net.lecousin.compression.lzma;
 
-public final class Matches {
+@SuppressWarnings("squid:ClassVariableVisibilityCheck")
+final class Matches {
     public final int[] len;
     public final int[] dist;
     public int count = 0;

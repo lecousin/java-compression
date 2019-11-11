@@ -1,8 +1,8 @@
-package net.lecousin.compression.lzma.rangecoder;
+package net.lecousin.compression.lzma;
 
 import java.io.IOException;
 
-public abstract class RangeDecoder extends RangeCoder {
+abstract class RangeDecoder extends RangeCoder {
     int range = 0;
     int code = 0;
 

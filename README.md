@@ -29,6 +29,7 @@ Modules:
  * deflate [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/deflate/0.1.7)
  * gzip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/gzip/0.1.7)
  * mszip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/mszip/0.1.7)
+ * lzma [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/lzma/0.1.7)
 
 ### Development branch 
 

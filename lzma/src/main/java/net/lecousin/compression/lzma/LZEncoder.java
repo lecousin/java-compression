@@ -8,7 +8,7 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.memory.IntArrayCache;
 
-public abstract class LZEncoder {
+abstract class LZEncoder {
     public static final int MF_HC4 = 0x04;
     public static final int MF_BT4 = 0x14;
 
@@ -111,7 +111,7 @@ public abstract class LZEncoder {
      *
      * @param       depthLimit  match finder search depth limit
      */
-    @SuppressWarnings("squid:S00107")
+    @SuppressWarnings({"squid:S00107","squid:S1301"})
     public static LZEncoder getInstance(
             int dictSize, int extraSizeBefore, int extraSizeAfter,
             int niceLen, int matchLenMax, int mf, int depthLimit,
@@ -124,9 +124,9 @@ public abstract class LZEncoder {
             case MF_BT4:
                 return new BT4(dictSize, extraSizeBefore, extraSizeAfter,
                                niceLen, matchLenMax, depthLimit, byteArrayCache, intArrayCache);
+            default:
+                throw new IllegalArgumentException();
         }
-
-        throw new IllegalArgumentException();
     }
 
     /**

@@ -111,8 +111,7 @@ final class BT4 extends LZEncoder {
 
         // If a match was found, see how long it is.
         if (matches.count > 0) {
-            while (lenBest < matchLenLimit && buf[readPos + lenBest - delta2]
-                                              == buf[readPos + lenBest])
+            while (lenBest < matchLenLimit && buf[readPos + lenBest - delta2] == buf[readPos + lenBest])
                 ++lenBest;
 
             matches.len[matches.count - 1] = lenBest;
@@ -127,6 +126,10 @@ final class BT4 extends LZEncoder {
 
         // Long enough match wasn't found so easily. Look for better matches
         // from the binary tree.
+        return getMatchesFromBinaryTree(lenBest, currentMatch, matchLenLimit, niceLenLimit);
+    }
+    
+    private Matches getMatchesFromBinaryTree(int lenBest, int currentMatch, int matchLenLimit, int niceLenLimit) {
         if (lenBest < 3)
             lenBest = 3;
 

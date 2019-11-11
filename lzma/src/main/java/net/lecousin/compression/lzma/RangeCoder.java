@@ -1,8 +1,8 @@
-package net.lecousin.compression.lzma.rangecoder;
+package net.lecousin.compression.lzma;
 
 import java.util.Arrays;
 
-public abstract class RangeCoder {
+abstract class RangeCoder {
 	
 	protected RangeCoder() {
 		// nothing to do
