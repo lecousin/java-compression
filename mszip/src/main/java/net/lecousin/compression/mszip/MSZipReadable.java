@@ -120,8 +120,8 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 				}
 				byte[] compressed = comp.array();
 				int nb = comp.remaining();
-				int pos = comp.arrayOffset() + comp.position();
-				if (compressed[pos] != 'C' || compressed[pos + 1] != 'K') {
+				int p = comp.arrayOffset() + comp.position();
+				if (compressed[p] != 'C' || compressed[p + 1] != 'K') {
 					error = new IOException("Invalid MSZIP: no CK signature in block " + blockIndex);
 					dataReady.unblock();
 					return null;
@@ -132,7 +132,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 						nextUncompress = new BlockUncompressor(blockIndex + 1);
 					}
 				}
-				inflater.setInput(compressed, pos + 2, nb - 2);
+				inflater.setInput(compressed, p + 2, nb - 2);
 				int n;
 				try {
 					do {
@@ -153,10 +153,12 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 						}
 						size += n;
 					} while (true);
-				} catch (Throwable t) {
+				} catch (Exception t) {
 					error = new IOException("Invalid deflated data in MSZip block " + blockIndex, t);
-					inflater.end();
-					inflater = null;
+					if (inflater != null) {
+						inflater.end();
+						inflater = null;
+					}
 					dataReady.unblock();
 					return null;
 				}
@@ -165,6 +167,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 	}
 	
 	@Override
+	@SuppressWarnings("squid:S2583") // error can change while waiting for dataReady
 	public int read() throws IOException {
 		if (error != null) throw error;
 		// wait for current block to have some data uncompressed
@@ -184,6 +187,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 	}
 	
 	@Override
+	@SuppressWarnings("squid:S2583") // error can change while waiting for dataReady
 	public int read(byte[] buffer, int offset, int len) throws IOException {
 		if (error != null) throw error;
 		// wait for current block to have some data uncompressed
@@ -213,6 +217,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 	}
 	
 	@Override
+	@SuppressWarnings("squid:S2583") // error can change while waiting for dataReady
 	public int readSync(ByteBuffer buffer) throws IOException {
 		if (error != null) throw error;
 		// wait for current block to have some data uncompressed
@@ -245,31 +250,12 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 	public AsyncSupplier<Integer, IOException> readFullySyncIfPossible(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		int done = 0;
 		do {
-			if (error != null) {
-				if (ondone != null) ondone.accept(new Pair<>(null, error));
-				return new AsyncSupplier<>(null, error);
-			}
+			if (error != null)
+				return IOUtil.error(error, ondone);
 			if (!uncompress.dataReady.isDone()) {
 				if (done == 0)
 					return readFullyAsync(buffer, ondone);
-				AsyncSupplier<Integer, IOException> r = new AsyncSupplier<>();
-				int d = done;
-				readFullyAsync(buffer, (res) -> {
-					if (ondone == null) return;
-					if (res.getValue1() == null) ondone.accept(res);
-					else {
-						int n = res.getValue1().intValue();
-						if (n < 0) n = d;
-						else n += d;
-						ondone.accept(new Pair<>(Integer.valueOf(n), null));
-					}
-				}).onDone((nb) -> {
-					int n = nb.intValue();
-					if (n < 0) n = d;
-					else n += d;
-					r.unblockSuccess(Integer.valueOf(n));
-				}, r);
-				return r;
+				return continueAsynchronously(done, buffer, ondone);
 			}
 			if (uncompress.pos < uncompress.size) {
 				int l = uncompress.size - uncompress.pos;
@@ -278,17 +264,37 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 				uncompress.pos += l;
 				done += l;
 				if (!buffer.hasRemaining())
-					return new AsyncSupplier<>(Integer.valueOf(done), null);
+					return IOUtil.success(Integer.valueOf(done), ondone);
 			}
 			synchronized (this) {
 				// current block is completely read
 				if (nextUncompress == null)
-					return new AsyncSupplier<>(Integer.valueOf(done > 0 ? done : -1), null);
+					return IOUtil.success(Integer.valueOf(done > 0 ? done : -1), ondone);
 				uncompress = nextUncompress;
 				if (!eof)
 					nextUncompress = new BlockUncompressor(uncompress.blockIndex + 1);
 			}
 		} while (true);
+	}
+	
+	private AsyncSupplier<Integer, IOException> continueAsynchronously(int d, ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
+		AsyncSupplier<Integer, IOException> r = new AsyncSupplier<>();
+		readFullyAsync(buffer, res -> {
+			if (ondone == null) return;
+			if (res.getValue1() == null) ondone.accept(res);
+			else {
+				int n = res.getValue1().intValue();
+				if (n < 0) n = d;
+				else n += d;
+				ondone.accept(new Pair<>(Integer.valueOf(n), null));
+			}
+		}).onDone(nb -> {
+			int n = nb.intValue();
+			if (n < 0) n = d;
+			else n += d;
+			r.unblockSuccess(Integer.valueOf(n));
+		}, r);
+		return r;
 	}
 	
 	@Override
@@ -362,18 +368,15 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 		AsyncSupplier<ByteBuffer, IOException> result = new AsyncSupplier<>();
 		ByteBuffer buffer = ByteBuffer.allocate(32768);
 		AsyncSupplier<Integer, IOException> read = readAsync(buffer);
-		read.onDone(new Runnable() {
-			@Override
-			public void run() {
-				if (read.hasError()) {
-					if (ondone != null) ondone.accept(new Pair<>(null, read.getError()));
-					result.error(read.getError());
-					return;
-				}
-				buffer.flip();
-				if (ondone != null) ondone.accept(new Pair<>(buffer, null));
-				result.unblockSuccess(buffer);
+		read.onDone(() -> {
+			if (read.hasError()) {
+				if (ondone != null) ondone.accept(new Pair<>(null, read.getError()));
+				result.error(read.getError());
+				return;
 			}
+			buffer.flip();
+			if (ondone != null) ondone.accept(new Pair<>(buffer, null));
+			result.unblockSuccess(buffer);
 		});
 		return result;
 	}
