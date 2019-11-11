@@ -7,9 +7,9 @@ import java.util.zip.CRC32;
 
 import net.lecousin.compression.deflate.DeflateWritable;
 import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
-import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
@@ -52,9 +52,7 @@ public class GZipWritable extends DeflateWritable {
 		}
 		if (!writeHeader.isDone()) {
 			AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-			writeHeader.onDone(() -> {
-				writeAsync(buffer, ondone).forward(result);
-			});
+			writeHeader.onDone(() -> writeAsync(buffer, ondone).forward(result));
 			return operation(result);
 		}
 		int initPos = buffer.position();

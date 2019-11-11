@@ -1,28 +1,30 @@
 package net.lecousin.compression.gzip;
 
-import java.nio.ByteBuffer;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import net.lecousin.framework.application.LCCore;
-import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
-import net.lecousin.framework.io.IO;
-import net.lecousin.framework.io.buffering.SimpleBufferedReadable;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized.Parameters;
 
 @RunWith(LCConcurrentRunner.Parameterized.class) @org.junit.runners.Parameterized.UseParametersRunnerFactory(LCConcurrentRunner.ConcurrentParameterizedRunnedFactory.class)
-public class TestGZipReadable extends LCCoreAbstractTest {
+public class TestGZipReadableErrors extends LCCoreAbstractTest {
 
 	private static final String[] files = {
-		"gzip-test/multiple.gz",
-		"gzip-test/multiple_with_comment.gz",
-		"gzip-test/multiple_with_empty_extra.gz",
-		"gzip-test/sample.txt.gz"
+		"gzip-test/error/empty.gz",
+		"gzip-test/error/1byte.gz",
+		"gzip-test/error/invalid_first_byte.gz",
+		"gzip-test/error/invalid_first_byte_2.gz",
+		"gzip-test/error/invalid_second_byte.gz",
+		"gzip-test/error/invalid_second_byte_2.gz",
+		"gzip-test/error/invalid_method.gz",
+		"gzip-test/error/filename_never_ending.gz",
+		"gzip-test/error/comment_never_ending.gz",
+		"gzip-test/error/extra_never_ending.gz",
 	};
 	
 	@Parameters(name = "file = {0}, bufferSize = {1}")
@@ -35,7 +37,7 @@ public class TestGZipReadable extends LCCoreAbstractTest {
 		return list;
 	}
 
-	public TestGZipReadable(String filename, int bufferSize) {
+	public TestGZipReadableErrors(String filename, int bufferSize) {
 		this.filename = filename;
 		this.bufferSize = bufferSize;
 	}
@@ -43,18 +45,9 @@ public class TestGZipReadable extends LCCoreAbstractTest {
 	private String filename;
 	private int bufferSize;
 	
-	@Test
+	@Test(expected = IOException.class)
 	public void test() throws Exception {
-		testFile(filename, bufferSize);
-	}
-	
-	static void testFile(String filename, int bufferSize) throws Exception {
-		IO.Readable source = LCCore.getApplication().getResource(filename, Task.PRIORITY_NORMAL);
-		IO.Readable.Buffered bin = new SimpleBufferedReadable(source, bufferSize);
-		try (GZipReadable gzip = new GZipReadable(bin, Task.PRIORITY_NORMAL)) {
-			byte[] buf = new byte[4096];
-			while (gzip.readFullySync(ByteBuffer.wrap(buf)) == 4096);
-		}
+		TestGZipReadable.testFile(filename, bufferSize);
 	}
 	
 }
