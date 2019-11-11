@@ -16,6 +16,7 @@ final class LZMAEncoderFast extends LZMAEncoder {
                 EXTRA_SIZE_AFTER, MATCH_LEN_MAX, mf);
     }
 
+    @SuppressWarnings("squid:S00107")
     LZMAEncoderFast(RangeEncoder rc, int lc, int lp, int pb,
                            int dictSize, int extraSizeBefore,
                            int niceLen, int mf, int depthLimit,
@@ -100,14 +101,13 @@ final class LZMAEncoderFast extends LZMAEncoder {
                 mainLen = 1;
         }
 
-        if (bestRepLen >= MATCH_LEN_MIN) {
-            if (bestRepLen + 1 >= mainLen
-                    || (bestRepLen + 2 >= mainLen && mainDist >= (1 << 9))
-                    || (bestRepLen + 3 >= mainLen && mainDist >= (1 << 15))) {
-                back = bestRepIndex;
-                skip(bestRepLen - 1);
-                return bestRepLen;
-            }
+        if (bestRepLen >= MATCH_LEN_MIN && 
+        	(bestRepLen + 1 >= mainLen
+                || (bestRepLen + 2 >= mainLen && mainDist >= (1 << 9))
+                || (bestRepLen + 3 >= mainLen && mainDist >= (1 << 15)))) {
+            back = bestRepIndex;
+            skip(bestRepLen - 1);
+            return bestRepLen;
         }
 
         if (mainLen < MATCH_LEN_MIN || avail <= MATCH_LEN_MIN)

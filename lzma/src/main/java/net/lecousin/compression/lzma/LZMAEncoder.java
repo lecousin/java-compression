@@ -78,6 +78,7 @@ abstract class LZMAEncoder extends LZMACoder {
         return m;
     }
 
+    @SuppressWarnings("squid:S00107")
     public static LZMAEncoder getInstance(
                 RangeEncoder rc, int lc, int lp, int pb, Mode mode,
                 int dictSize, int extraSizeBefore,
@@ -100,8 +101,8 @@ abstract class LZMAEncoder extends LZMACoder {
         throw new IllegalArgumentException();
     }
 
-    public void putArraysToCache(ByteArrayCache arrayCache) {
-        lz.putArraysToCache(arrayCache);
+    public void putArraysToCache(ByteArrayCache arrayCache, IntArrayCache intArrayCache) {
+        lz.putArraysToCache(arrayCache, intArrayCache);
     }
 
     /**
@@ -210,7 +211,7 @@ abstract class LZMAEncoder extends LZMACoder {
         if (!lz.isStarted() && !encodeInit())
             return;
 
-        while (encodeSymbol()) {}
+        while (encodeSymbol());
     }
 
     public void encodeLZMA1EndMarker() throws IOException {
@@ -242,7 +243,7 @@ abstract class LZMAEncoder extends LZMACoder {
                 if (!encodeSymbol())
                     return false;
         } catch (IOException e) {
-            throw new Error();
+        	throw new IllegalStateException(e);
         }
 
         return true;
@@ -468,9 +469,7 @@ abstract class LZMAEncoder extends LZMACoder {
                         += RangeEncoder.getDirectBitsPrice(count);
             }
 
-            for (int dist = 0; dist < DIST_MODEL_START; ++dist)
-                fullDistPrices[distState][dist]
-                        = distSlotPrices[distState][dist];
+            System.arraycopy(distSlotPrices[distState], 0, fullDistPrices[distState], 0, DIST_MODEL_START);
         }
 
         int dist = DIST_MODEL_START;

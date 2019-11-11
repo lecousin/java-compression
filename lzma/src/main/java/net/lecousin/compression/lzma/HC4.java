@@ -24,6 +24,7 @@ final class HC4 extends LZEncoder {
      * Creates a new LZEncoder with the HC4 match finder.
      * See <code>LZEncoder.getInstance</code> for parameter descriptions.
      */
+    @SuppressWarnings("squid:S00107")
     HC4(int dictSize, int beforeSizeMin, int readAheadMax,
             int niceLen, int matchLenMax, int depthLimit,
             ByteArrayCache byteArrayCache, IntArrayCache intArrayCache) {
@@ -47,10 +48,11 @@ final class HC4 extends LZEncoder {
         this.depthLimit = (depthLimit > 0) ? depthLimit : 4 + niceLen / 4;
     }
 
+    @Override
     public void putArraysToCache(ByteArrayCache byteArrayCache, IntArrayCache intArrayCache) {
     	intArrayCache.free(chain);
         hash.putArraysToCache(intArrayCache);
-        super.putArraysToCache(byteArrayCache);
+        super.putArraysToCache(byteArrayCache, intArrayCache);
     }
 
     /**
@@ -188,7 +190,8 @@ final class HC4 extends LZEncoder {
 
     @Override
 	public void skip(int len) {
-        assert len >= 0;
+    	if (len < 0)
+    		throw new IllegalArgumentException("len cannot be negative");
 
         while (len-- > 0) {
             if (movePos() != 0) {

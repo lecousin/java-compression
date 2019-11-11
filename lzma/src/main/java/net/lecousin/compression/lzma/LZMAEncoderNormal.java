@@ -28,6 +28,7 @@ final class LZMAEncoderNormal extends LZMAEncoder {
                + OPTS * 64 / 1024;
     }
 
+    @SuppressWarnings("squid:S00107")
     LZMAEncoderNormal(RangeEncoder rc, int lc, int lp, int pb,
                              int dictSize, int extraSizeBefore,
                              int niceLen, int mf, int depthLimit,

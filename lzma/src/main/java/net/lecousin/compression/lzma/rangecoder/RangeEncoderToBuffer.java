@@ -39,7 +39,7 @@ public final class RangeEncoderToBuffer extends RangeEncoder {
         try {
             super.finish();
         } catch (IOException e) {
-            throw new Error();
+            throw new IllegalStateException(e);
         }
 
         return bufPos;

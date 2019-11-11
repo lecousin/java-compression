@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 
 import net.lecousin.framework.collections.ArrayUtil;
@@ -28,18 +29,31 @@ import org.junit.runners.Parameterized.Parameters;
 @RunWith(Parameterized.class)
 public class TestLZMA2Writable extends LCCoreAbstractTest {
 
-	@Parameters(name = "nbBuf = {1}")
+	@Parameters(name = "nbBuf = {1}, preset = {2}")
 	public static Collection<Object[]> parameters() {
-		return TestIO.UsingTestData.generateTestCases(false);
+		Collection<Object[]> params = TestIO.UsingTestData.generateTestCases(false);
+		ArrayList<Object[]> list = new ArrayList<>(params.size() * (LZMA2Options.PRESET_MAX - LZMA2Options.PRESET_MIN + 1));
+		for (Object[] p : params) {
+			// do not use MAX because we get OutOfMemoryError
+			for (int preset = LZMA2Options.PRESET_MIN; preset <= LZMA2Options.PRESET_MAX - 1; ++preset) {
+				Object[] o = new Object[p.length + 1];
+				System.arraycopy(p, 0, o, 0, p.length);
+				o[p.length] = Integer.valueOf(preset);
+				list.add(o);
+			}
+		}
+		return list;
 	}
 	
-	public TestLZMA2Writable(byte[] testBuf, int nbBuf) {
+	public TestLZMA2Writable(byte[] testBuf, int nbBuf, int preset) {
 		this.testBuf = testBuf;
 		this.nbBuf = nbBuf;
+		this.preset = preset;
 	}
 	
 	private byte[] testBuf;
 	private int nbBuf;
+	private int preset;
 	
 	@Test
 	public void testCompressSyncUncompress() throws Exception {
@@ -47,7 +61,7 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 		tmp.deleteOnExit();
 		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
 		IO.Writable.Buffered bout = new SimpleBufferedWritable(fout, 4096);
-		LZMA2Options options = new LZMA2Options(LZMA2Options.PRESET_DEFAULT);
+		LZMA2Options options = new LZMA2Options(preset);
 		LZMA2Writable out = new LZMA2Writable(bout, options);
 		for (int i = 0; i < nbBuf; ++i)
 			out.writeSync(ByteBuffer.wrap(testBuf));
@@ -63,7 +77,7 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 		tmp.deleteOnExit();
 		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
 		IO.Writable.Buffered bout = new SimpleBufferedWritable(fout, 4096);
-		LZMA2Options options = new LZMA2Options(LZMA2Options.PRESET_DEFAULT);
+		LZMA2Options options = new LZMA2Options(preset);
 		LZMA2Writable out = new LZMA2Writable(bout, options);
 		MutableInteger nb = new MutableInteger(0);
 		Async<Exception> done = new Async<>();
@@ -117,7 +131,7 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 	
 	private void checkFile(File f) throws IOException {
 		FileInputStream fin = new FileInputStream(f);
-		org.tukaani.xz.LZMA2Options options = new org.tukaani.xz.LZMA2Options(org.tukaani.xz.LZMA2Options.PRESET_DEFAULT);
+		org.tukaani.xz.LZMA2Options options = new org.tukaani.xz.LZMA2Options(preset);
 		InputStream in = options.getInputStream(fin);
 		byte[] b = new byte[testBuf.length];
 		for (int i = 0; i < nbBuf; ++i) {

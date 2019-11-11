@@ -3,6 +3,7 @@ package net.lecousin.compression.lzma;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.util.function.Consumer;
 
 import net.lecousin.compression.lzma.rangecoder.RangeDecoderFromBuffer;
@@ -161,7 +162,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         // Check for null because otherwise null isn't detect
         // in this constructor.
         if (input == null)
-            throw new NullPointerException();
+            throw new IllegalArgumentException("input is null");
 
         if (arrayCache == null) arrayCache = ByteArrayCache.getInstance();
         this.arrayCache = arrayCache;
@@ -188,14 +189,15 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
     
     public int readSync(ByteBuffer buffer, boolean fully) throws IOException {
         if (buffer.remaining() == 0) return 0;
-        if (input == null || isClosing()) throw new IOException("Stream closed");
+        if (input == null || isClosing()) throw new ClosedChannelException();
         if (endReached) return -1;
 
         int size = 0;
 
         while (buffer.hasRemaining()) {
             if (uncompressedSize == 0) {
-            	if (!fully && size > 0) return size;
+            	if (!fully && size > 0)
+            		return size;
                 decodeChunkHeaderSync();
                 if (endReached)
                     return size == 0 ? -1 : size;
@@ -214,9 +216,8 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
             size += copiedSize;
             uncompressedSize -= copiedSize;
 
-            if (uncompressedSize == 0)
-                if (!rc.isFinished() || lz.hasPending())
-                    throw new CorruptedInputException();
+            if (uncompressedSize == 0 && (!rc.isFinished() || lz.hasPending()))
+            	throw new CorruptedInputException();
         }
 
         return size;
@@ -224,27 +225,29 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
 
 	@Override
 	public AsyncSupplier<Integer, IOException> readFullyAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
-    	if (!buffer.hasRemaining()) return IOUtil.success(Integer.valueOf(0), ondone);
-        if (input == null || isClosing()) return IOUtil.error(new IOException("Stream closed"), ondone);
-        if (endReached) return IOUtil.success(Integer.valueOf(-1), ondone);
+    	if (!buffer.hasRemaining())
+    		return IOUtil.success(Integer.valueOf(0), ondone);
+        if (input == null || isClosing())
+        	return IOUtil.error(new ClosedChannelException(), ondone);
+        if (endReached)
+        	return IOUtil.success(Integer.valueOf(-1), ondone);
         
         AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-    	TaskUtil.decompressionTask(input, () -> {
-    		readAsync(buffer, result, 0, true, false, ondone);
-       	}).start(); 
+    	TaskUtil.decompressionTask(input, () -> readAsync(buffer, result, 0, true, false, ondone)).start(); 
     	return result;
 	}
     
     @Override
     public AsyncSupplier<Integer, IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
-    	if (!buffer.hasRemaining()) return IOUtil.success(Integer.valueOf(0), ondone);
-        if (input == null || isClosing()) return IOUtil.error(new IOException("Stream closed"), ondone);
-        if (endReached) return IOUtil.success(Integer.valueOf(-1), ondone);
+    	if (!buffer.hasRemaining())
+    		return IOUtil.success(Integer.valueOf(0), ondone);
+        if (input == null || isClosing())
+        	return IOUtil.error(new ClosedChannelException(), ondone);
+        if (endReached)
+        	return IOUtil.success(Integer.valueOf(-1), ondone);
 
         AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-    	TaskUtil.decompressionTask(input, () -> {
-    		readAsync(buffer, result, 0, false, false, ondone);
-       	}).start(); 
+    	TaskUtil.decompressionTask(input, () -> readAsync(buffer, result, 0, false, false, ondone)).start(); 
     	return result;
     }
     
@@ -261,9 +264,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
     		}
     		IAsync<IOException> header = decodeChunkHeaderAsync();
     		if (!header.isDone()) {
-    			header.thenStart(TaskUtil.decompressionTask(input, () -> {
-    				readAsync(buffer, result, done, fully, true, ondone);
-    			}), result);
+    			header.thenStart(TaskUtil.decompressionTask(input, () -> readAsync(buffer, result, done, fully, true, ondone)), result);
     			return;
     		}
     		if (!header.isSuccessful()) {
@@ -281,9 +282,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         if (!isLZMAChunk) {
         	IAsync<IOException> copy = lz.copyUncompressedSyncIfPossible(input, copySizeMax);
     		if (!copy.isDone()) {
-    			copy.thenStart(TaskUtil.decompressionTask(input, () -> {
-    				readAsync2(buffer, result, done, fully, ondone);
-    			}), result);
+    			copy.thenStart(TaskUtil.decompressionTask(input, () -> readAsync2(buffer, result, done, fully, ondone)), result);
     			return;
     		}
     		if (!copy.isSuccessful()) {
@@ -305,11 +304,10 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
     	int copiedSize = lz.flush(buffer);
         uncompressedSize -= copiedSize;
 
-        if (uncompressedSize == 0)
-            if (!rc.isFinished() || lz.hasPending()) {
-            	IOUtil.error(new CorruptedInputException(), result, ondone);
-            	return;
-            }
+        if (uncompressedSize == 0 && (!rc.isFinished() || lz.hasPending())) {
+        	IOUtil.error(new CorruptedInputException(), result, ondone);
+        	return;
+        }
         
         if (!fully || !buffer.hasRemaining())
         	IOUtil.success(Integer.valueOf(done + copiedSize), result, ondone);
@@ -369,9 +367,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         try { control = input.readAsync(); }
         catch (IOException e) { return new Async<>(e); }
         if (control == -2)
-        	return TaskUtil.continueDecompression(input, input.canStartReading(), () -> {
-        		return decodeChunkHeaderAsync();
-        	});
+        	return TaskUtil.continueDecompression(input, input.canStartReading(), this::decodeChunkHeaderAsync);
 
         if (control == 0x00) {
             endReached = true;
@@ -391,9 +387,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         	byte[] buf = new byte[4];
         	AsyncSupplier<Integer, IOException> read = input.readFullySyncIfPossible(ByteBuffer.wrap(buf, 0, 4));
         	if (!read.isDone())
-        		return TaskUtil.continueDecompression(input, read, () -> {
-        			return decodeChunkHeaderLZMAAsync(control, buf);
-        		});
+        		return TaskUtil.continueDecompression(input, read, () -> decodeChunkHeaderLZMAAsync(control, buf));
         	if (!read.isSuccessful()) return read;
     		if (read.getResult().intValue() != 4)
     			return new Async<>(new EOFException());
@@ -404,9 +398,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         byte[] buf = new byte[2];
         AsyncSupplier<Integer, IOException> read = input.readFullySyncIfPossible(ByteBuffer.wrap(buf, 0, 2));
     	if (!read.isDone())
-    		return TaskUtil.continueDecompression(input, read, () -> {
-    			return decodeChunkHeaderUncompressedAsync(buf);
-    		});
+    		return TaskUtil.continueDecompression(input, read, () -> decodeChunkHeaderUncompressedAsync(buf));
     	if (!read.isSuccessful()) return read;
 		if (read.getResult().intValue() != 2)
 			return new Async<>(new EOFException());
@@ -425,9 +417,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
             needProps = false;
             IAsync<IOException> decode = decodePropsAsync();
             if (!decode.isDone())
-            	return TaskUtil.continueDecompression(input, decode, () -> {
-            		return rc.prepareInputBufferAsync(input, compressedSize);
-            	});
+            	return TaskUtil.continueDecompression(input, decode, () -> rc.prepareInputBufferAsync(input, compressedSize));
             if (!decode.isSuccessful()) return decode;
         } else if (needProps) {
         	return new Async<>(new CorruptedInputException());
@@ -470,9 +460,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         }
         
         if (props == -2)
-        	return TaskUtil.continueDecompression(input, input.canStartReading(), () -> {
-        		return decodePropsAsync();
-        	});
+        	return TaskUtil.continueDecompression(input, input.canStartReading(), this::decodePropsAsync);
 
         if (props > (4 * 5 + 4) * 9 + 8)
             return new Async<>(new CorruptedInputException());

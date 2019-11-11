@@ -106,7 +106,7 @@ final class LZDecoder {
     public IAsync<IOException> copyUncompressedSyncIfPossible(IO.Readable.Buffered input, int len) {
         int copySize = Math.min(bufSize - pos, len);
         return TaskUtil.checkRead(
-        	input.readFullySyncIfPossible(ByteBuffer.wrap(buf, pos, copySize), (res) -> {
+        	input.readFullySyncIfPossible(ByteBuffer.wrap(buf, pos, copySize), res -> {
         		if (res.getValue1() != null) {
         	        pos += copySize;
 

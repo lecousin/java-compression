@@ -22,4 +22,8 @@ class CRC32Hash {
             crcTable[i] = r;
         }
     }
+    
+    protected CRC32Hash() {
+    	// nothing
+    }
 }

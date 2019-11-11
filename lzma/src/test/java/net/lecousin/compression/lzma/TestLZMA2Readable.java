@@ -3,6 +3,7 @@ package net.lecousin.compression.lzma;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 
 import net.lecousin.framework.concurrent.Task;
@@ -21,21 +22,35 @@ import org.tukaani.xz.FinishableWrapperOutputStream;
 @RunWith(Parameterized.class)
 public class TestLZMA2Readable extends TestReadable {
 
-	@Parameters(name = "nbBuf = {2}")
+	@Parameters(name = "nbBuf = {2}, preset = {3}")
 	public static Collection<Object[]> parameters() {
-		return TestIO.UsingGeneratedTestFiles.generateTestCases(false);
+		Collection<Object[]> params = TestIO.UsingGeneratedTestFiles.generateTestCases(false);
+		ArrayList<Object[]> list = new ArrayList<>(params.size() * (LZMA2Options.PRESET_MAX - LZMA2Options.PRESET_MIN + 1));
+		for (Object[] p : params) {
+			// do not use MAX because we get OutOfMemoryError
+			for (int preset = LZMA2Options.PRESET_MIN; preset <= LZMA2Options.PRESET_MAX - 1; ++preset) {
+				Object[] o = new Object[p.length + 1];
+				System.arraycopy(p, 0, o, 0, p.length);
+				o[p.length] = Integer.valueOf(preset);
+				list.add(o);
+			}
+		}
+		return list;
 	}
 	
-	public TestLZMA2Readable(File testFile, byte[] testBuf, int nbBuf) {
+	public TestLZMA2Readable(File testFile, byte[] testBuf, int nbBuf, int preset) {
 		super(testFile, testBuf, nbBuf);
+		this.preset = preset;
 	}
+	
+	protected int preset;
 	
 	@Override
 	protected IO.Readable createReadableFromFile(FileIO.ReadOnly file, long fileSize) throws Exception {
 		File tmp = File.createTempFile("test", "_" + fileSize + "_lzma2");
 		tmp.deleteOnExit();
 		FileOutputStream fout = new FileOutputStream(tmp);
-		org.tukaani.xz.LZMA2Options options = new org.tukaani.xz.LZMA2Options(org.tukaani.xz.LZMA2Options.PRESET_DEFAULT);
+		org.tukaani.xz.LZMA2Options options = new org.tukaani.xz.LZMA2Options(preset);
 		FinishableOutputStream out = options.getOutputStream(new FinishableWrapperOutputStream(fout));
 		byte[] buffer = new byte[65536];
 		while (true) {

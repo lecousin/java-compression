@@ -53,7 +53,7 @@ public final class RangeDecoderFromBuffer extends RangeDecoder {
         try {
 	        int i = input.readAsync();
 	        if (i == -2)
-	        	return TaskUtil.continueDecompression(input, input.canStartReading(), () -> { return prepareInputBufferAsync(input, len); });
+	        	return TaskUtil.continueDecompression(input, input.canStartReading(), () -> prepareInputBufferAsync(input, len));
 	
 	        if (i != 0x00) return new Async<>(new CorruptedInputException());
 	

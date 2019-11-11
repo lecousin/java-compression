@@ -7,7 +7,7 @@ package net.lecousin.compression.lzma;
  * often you only need <code>LZMA2Options()</code> or
  * <code>LZMA2Options(int)</code>.
  */
-public class LZMA2Options extends FilterOptions {
+public class LZMA2Options implements FilterOptions {
     /**
      * Minimum valid compression preset level is 0.
      */
@@ -71,7 +71,7 @@ public class LZMA2Options extends FilterOptions {
      */
     public static final int PB_DEFAULT = 2;
 
-    public static enum Mode {
+    public enum Mode {
     	FAST,
     	NORMAL;
     }
@@ -120,8 +120,7 @@ public class LZMA2Options extends FilterOptions {
         try {
             setPreset(PRESET_DEFAULT);
         } catch (UnsupportedOptionsException e) {
-            assert false;
-            throw new RuntimeException();
+        	throw new IllegalStateException();
         }
     }
 
@@ -141,6 +140,7 @@ public class LZMA2Options extends FilterOptions {
      * @throws      UnsupportedOptionsException
      *                          unsupported options were specified
      */
+    @SuppressWarnings("squid:S00107")
     public LZMA2Options(int dictSize, int lc, int lp, int pb, Mode mode,
                         int niceLen, int mf, int depthLimit)
             throws UnsupportedOptionsException {
@@ -525,7 +525,7 @@ public class LZMA2Options extends FilterOptions {
     }
 
     @Override
-	FilterEncoder getFilterEncoder() {
+	public FilterEncoder getFilterEncoder() {
         return new LZMA2Encoder(this);
     }
 
@@ -534,8 +534,7 @@ public class LZMA2Options extends FilterOptions {
         try {
             return super.clone();
         } catch (CloneNotSupportedException e) {
-            assert false;
-            throw new RuntimeException();
+        	throw new IllegalStateException();
         }
     }
 }

@@ -10,7 +10,11 @@ import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
 
-public class TaskUtil {
+public final class TaskUtil {
+	
+	private TaskUtil() {
+		// no instance
+	}
 	
 	public static Task.Cpu.FromRunnable decompressionTask(IO.Readable input, Runnable r) {
 		return new Task.Cpu.FromRunnable("LZMA Decompression", input.getPriority(), r);
@@ -19,17 +23,19 @@ public class TaskUtil {
 	public static Async<IOException> continueDecompression(IO.Readable.Buffered input, IAsync<IOException> waiting, Supplier<IAsync<IOException>> continueProvider) {
 		Async<IOException> sp = new Async<>();
     	waiting.thenStart(decompressionTask(input, () -> {
-    		continueProvider.get().onDone(sp);
+    		try {
+    			continueProvider.get().onDone(sp);
+    		} catch (Exception e) {
+    			sp.error(IO.error(e));
+    		}
     	}), sp);
     	return sp;
 	}
 	
 	public static IAsync<IOException> checkRead(AsyncSupplier<Integer, IOException> read, int len) {
         if (read.isDone()) {
-        	if (read.isSuccessful()) {
-        		if (read.getResult().intValue() != len)
-        			return new Async<>(new EOFException());
-        	}
+        	if (read.isSuccessful() && read.getResult().intValue() != len)
+        		return new Async<>(new EOFException());
         	return read;
         }
         Async<IOException> sp = new Async<>();
@@ -48,9 +54,7 @@ public class TaskUtil {
 
 	public static Async<IOException> continueCompression(IO.Writable.Buffered output, IAsync<IOException> waiting, Supplier<IAsync<IOException>> continueProvider) {
 		Async<IOException> sp = new Async<>();
-		waiting.thenStart(compressionTask(output, () -> {
-    		continueProvider.get().onDone(sp);
-    	}), sp);
+		waiting.thenStart(compressionTask(output, () -> continueProvider.get().onDone(sp)), sp);
     	return sp;
 	}
 	

@@ -23,7 +23,8 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
 
     static final int COMPRESSED_SIZE_MAX = 64 << 10;
 
-    private final ByteArrayCache arrayCache;
+    private final ByteArrayCache byteArrayCache;
+    private final IntArrayCache intArrayCache;
 
     private IO.Writable.Buffered output;
 
@@ -59,11 +60,12 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
     
     public LZMA2Writable(IO.Writable.Buffered output, LZMA2Options options, ByteArrayCache byteArrayCache, IntArrayCache intArrayCache) {
         if (output == null)
-            throw new NullPointerException();
+            throw new IllegalArgumentException("output cannot be null");
 
-        this.arrayCache = byteArrayCache;
+        this.byteArrayCache = byteArrayCache;
+        this.intArrayCache = intArrayCache;
         this.output = output;
-        rc = new RangeEncoderToBuffer(COMPRESSED_SIZE_MAX, arrayCache);
+        rc = new RangeEncoderToBuffer(COMPRESSED_SIZE_MAX, byteArrayCache);
 
         int dictSize = options.getDictSize();
         int extraSizeBefore = getExtraSizeBefore(dictSize);
@@ -72,7 +74,7 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
                 options.getMode(),
                 dictSize, extraSizeBefore, options.getNiceLen(),
                 options.getMatchFinder(), options.getDepthLimit(),
-                this.arrayCache, intArrayCache);
+                byteArrayCache, intArrayCache);
 
         lz = lzma.getLZEncoder();
 
@@ -108,9 +110,7 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
             return IOUtil.error(new IOException("Stream finished or closed"), ondone);
 
         AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-        TaskUtil.compressionTask(output, () -> {
-        	writeAsync(buffer, 0, result, ondone);
-        }).start();
+        TaskUtil.compressionTask(output, () -> writeAsync(buffer, 0, result, ondone)).start();
         return result;
     }
     
@@ -124,9 +124,7 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
                 IAsync<IOException> write = writeChunkAsync();
                 if (!write.isDone()) {
                 	int d = done;
-                	write.thenStart(TaskUtil.compressionTask(output, () -> {
-                		writeAsync(buffer, d, result, ondone);
-                	}), result);
+                	write.thenStart(TaskUtil.compressionTask(output, () -> writeAsync(buffer, d, result, ondone)), result);
                 	return;
                 }
                 if (!write.isSuccessful()) {
@@ -295,8 +293,9 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
             dictResetNeeded = false;
             if (!write.isDone()) {
             	int remaining = uncompressedSize;
-            	return TaskUtil.continueCompression(output, write, () -> { return writeUncompressedAsync(remaining); });
-            } if (!write.isSuccessful())
+            	return TaskUtil.continueCompression(output, write, () -> writeUncompressedAsync(remaining));
+            }
+            if (!write.isSuccessful())
             	return write;
         }
 
@@ -318,10 +317,10 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
 
         finished = true;
 
-        lzma.putArraysToCache(arrayCache);
+        lzma.putArraysToCache(byteArrayCache, intArrayCache);
         lzma = null;
         lz = null;
-        rc.putArraysToCache(arrayCache);
+        rc.putArraysToCache(byteArrayCache);
         rc = null;
         output.flush().blockException(0);
     }
@@ -340,9 +339,7 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
             lzma.encodeForLZMA2();
             IAsync<IOException> write = writeChunkAsync();
             if (!write.isDone()) {
-            	write.thenStart(TaskUtil.compressionTask(output, () -> {
-            		finishing(sp);
-            	}), sp);
+            	write.thenStart(TaskUtil.compressionTask(output, () -> finishing(sp)), sp);
             	return;
             }
             if (!write.isSuccessful()) {
@@ -361,10 +358,10 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
 
         finished = true;
 
-        lzma.putArraysToCache(arrayCache);
+        lzma.putArraysToCache(byteArrayCache, intArrayCache);
         lzma = null;
         lz = null;
-        rc.putArraysToCache(arrayCache);
+        rc.putArraysToCache(byteArrayCache);
         rc = null;
         output.flush().onDone(sp);
     }
@@ -374,9 +371,7 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
     	if (output != null) {
     		if (!finished) {
     			Async<IOException> sp = new Async<>();
-    			finishAsync().onDone(() -> {
-    				output.closeAsync().onDone(sp);
-    			}, sp);
+    			finishAsync().onDone(() -> output.closeAsync().onDone(sp), sp);
     			return sp;
     		}
     		return output.closeAsync();

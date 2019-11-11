@@ -111,6 +111,7 @@ public abstract class LZEncoder {
      *
      * @param       depthLimit  match finder search depth limit
      */
+    @SuppressWarnings("squid:S00107")
     public static LZEncoder getInstance(
             int dictSize, int extraSizeBefore, int extraSizeAfter,
             int niceLen, int matchLenMax, int mf, int depthLimit,
@@ -144,7 +145,7 @@ public abstract class LZEncoder {
         this.niceLen = niceLen;
     }
 
-    public void putArraysToCache(ByteArrayCache arrayCache) {
+    public void putArraysToCache(ByteArrayCache arrayCache, @SuppressWarnings({"unused","squid:S1172"}) IntArrayCache intArrayCache) {
         arrayCache.free(buf);
     }
 
@@ -405,11 +406,9 @@ public abstract class LZEncoder {
         ++readPos;
         int avail = writePos - readPos;
 
-        if (avail < requiredForFlushing) {
-            if (avail < requiredForFinishing || !finishing) {
-                ++pendingSize;
-                avail = 0;
-            }
+        if (avail < requiredForFlushing && (avail < requiredForFinishing || !finishing)) {
+            ++pendingSize;
+            avail = 0;
         }
 
         return avail;

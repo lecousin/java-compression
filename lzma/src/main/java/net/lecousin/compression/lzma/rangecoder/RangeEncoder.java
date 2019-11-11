@@ -52,7 +52,7 @@ public abstract class RangeEncoder extends RangeCoder {
         // This function is only needed by users of RangeEncoderToBuffer,
         // but providing a must-be-never-called version here makes
         // LZMAEncoder simpler.
-        throw new Error();
+        throw new UnsupportedOperationException();
     }
 
     public int finish() throws IOException {
@@ -110,9 +110,9 @@ public abstract class RangeEncoder extends RangeCoder {
 
     public static int getBitPrice(int prob, int bit) {
         // NOTE: Unlike in encodeBit(), here bit must be 0 or 1.
-        assert bit == 0 || bit == 1;
-        return prices[(prob ^ ((-bit) & (BIT_MODEL_TOTAL - 1)))
-                      >>> MOVE_REDUCING_BITS];
+    	if (bit != 0 && bit != 1)
+    		throw new IllegalArgumentException("bit must be 0 or 1");
+        return prices[(prob ^ ((-bit) & (BIT_MODEL_TOTAL - 1))) >>> MOVE_REDUCING_BITS];
     }
 
     public void encodeBitTree(short[] probs, int symbol) throws IOException {

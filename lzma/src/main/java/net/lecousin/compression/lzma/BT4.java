@@ -17,6 +17,7 @@ final class BT4 extends LZEncoder {
         return Hash234.getMemoryUsage(dictSize) + dictSize / (1024 / 8) + 10;
     }
 
+    @SuppressWarnings("squid:S00107")
     BT4(int dictSize, int beforeSizeMin, int readAheadMax,
             int niceLen, int matchLenMax, int depthLimit,
             ByteArrayCache byteArrayCache, IntArrayCache intArrayCache) {
@@ -36,10 +37,11 @@ final class BT4 extends LZEncoder {
         this.depthLimit = depthLimit > 0 ? depthLimit : 16 + niceLen / 2;
     }
 
+    @Override
     public void putArraysToCache(ByteArrayCache byteArrayCache, IntArrayCache intArrayCache) {
     	intArrayCache.free(tree);
         hash.putArraysToCache(intArrayCache);
-        super.putArraysToCache(byteArrayCache);
+        super.putArraysToCache(byteArrayCache, intArrayCache);
     }
 
     private int movePos() {
