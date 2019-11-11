@@ -89,40 +89,45 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 		write.get().onDone(new Runnable() {
 			@Override
 			public void run() {
-				if (write.get().hasError()) {
-					done.error(write.get().getError());
-					return;
-				}
-				if (write.get().isCancelled()) {
-					done.cancel(write.get().getCancelEvent());
-					return;
-				}
-				if (nb.inc() < nbBuf) {
-					write.set(out.writeAsync(ByteBuffer.wrap(testBuf)));
-					write.get().onDone(this);
-					return;
-				}
-				IAsync<IOException> finish = out.finishAsync();
-				finish.onDone(new Runnable() {
-					@Override
-					public void run() {
-						if (finish.hasError()) {
-							done.error(finish.getError());
-							return;
-						}
-						if (finish.isCancelled()) {
-							done.cancel(finish.getCancelEvent());
-							return;
-						}
-						try {
-							fout.close();
-							checkFile(tmp);
-							done.unblock();
-						} catch (Exception e) {
-							done.error(e);
-						}
+				do {
+					if (write.get().hasError()) {
+						done.error(write.get().getError());
+						return;
 					}
-				});
+					if (write.get().isCancelled()) {
+						done.cancel(write.get().getCancelEvent());
+						return;
+					}
+					if (nb.inc() < nbBuf) {
+						write.set(out.writeAsync(ByteBuffer.wrap(testBuf)));
+						if (write.get().isDone())
+							continue;
+						write.get().onDone(this);
+						return;
+					}
+					IAsync<IOException> finish = out.finishAsync();
+					finish.onDone(new Runnable() {
+						@Override
+						public void run() {
+							if (finish.hasError()) {
+								done.error(finish.getError());
+								return;
+							}
+							if (finish.isCancelled()) {
+								done.cancel(finish.getCancelEvent());
+								return;
+							}
+							try {
+								fout.close();
+								checkFile(tmp);
+								done.unblock();
+							} catch (Exception e) {
+								done.error(e);
+							}
+						}
+					});
+					break;
+				} while (true);
 			}
 		});
 		done.blockThrow(0);
