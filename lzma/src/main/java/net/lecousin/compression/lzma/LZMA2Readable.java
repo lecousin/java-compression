@@ -232,7 +232,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         	return IOUtil.success(Integer.valueOf(-1), ondone);
         
         AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-    	TaskUtil.decompressionTask(input, () -> readAsync(buffer, result, 0, true, false, ondone)).start(); 
+    	TaskUtil.decompressionTask(input, () -> readAsync(buffer, result, 0, true, false, ondone), result).start(); 
     	return result;
 	}
     
@@ -246,7 +246,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         	return IOUtil.success(Integer.valueOf(-1), ondone);
 
         AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-    	TaskUtil.decompressionTask(input, () -> readAsync(buffer, result, 0, false, false, ondone)).start(); 
+    	TaskUtil.decompressionTask(input, () -> readAsync(buffer, result, 0, false, false, ondone), result).start(); 
     	return result;
     }
     
@@ -263,7 +263,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
     		}
     		IAsync<IOException> header = decodeChunkHeaderAsync();
     		if (!header.isDone()) {
-    			header.thenStart(TaskUtil.decompressionTask(input, () -> readAsync(buffer, result, done, fully, true, ondone)), result);
+    			header.thenStart(TaskUtil.decompressionTask(input, () -> readAsync(buffer, result, done, fully, true, ondone), result), result);
     			return;
     		}
     		if (!header.isSuccessful()) {
@@ -281,7 +281,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         if (!isLZMAChunk) {
         	IAsync<IOException> copy = lz.copyUncompressedSyncIfPossible(input, copySizeMax);
     		if (!copy.isDone()) {
-    			copy.thenStart(TaskUtil.decompressionTask(input, () -> readAsync2(buffer, result, done, fully, ondone)), result);
+    			copy.thenStart(TaskUtil.decompressionTask(input, () -> readAsync2(buffer, result, done, fully, ondone), result), result);
     			return;
     		}
     		if (!copy.isSuccessful()) {

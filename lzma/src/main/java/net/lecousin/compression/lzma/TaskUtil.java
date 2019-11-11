@@ -16,19 +16,18 @@ final class TaskUtil {
 		// no instance
 	}
 	
-	public static Task.Cpu.FromRunnable decompressionTask(IO.Readable input, Runnable r) {
-		return new Task.Cpu.FromRunnable("LZMA Decompression", input.getPriority(), r);
+	public static Task.Cpu.FromRunnable decompressionTask(IO.Readable input, Runnable r, IAsync<IOException> onerror) {
+		return new Task.Cpu.FromRunnable("LZMA Decompression", input.getPriority(), () -> {
+			try { r.run(); }
+			catch (Exception e) {
+				onerror.error(IO.error(e));
+			}
+		});
 	}
 
 	public static Async<IOException> continueDecompression(IO.Readable.Buffered input, IAsync<IOException> waiting, Supplier<IAsync<IOException>> continueProvider) {
 		Async<IOException> sp = new Async<>();
-    	waiting.thenStart(decompressionTask(input, () -> {
-    		try {
-    			continueProvider.get().onDone(sp);
-    		} catch (Exception e) {
-    			sp.error(IO.error(e));
-    		}
-    	}), sp);
+    	waiting.thenStart(decompressionTask(input, () -> continueProvider.get().onDone(sp), sp), sp);
     	return sp;
 	}
 	
