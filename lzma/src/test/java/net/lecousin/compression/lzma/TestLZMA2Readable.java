@@ -28,7 +28,7 @@ public class TestLZMA2Readable extends TestReadable {
 		ArrayList<Object[]> list = new ArrayList<>(params.size() * (LZMA2Options.PRESET_MAX - LZMA2Options.PRESET_MIN + 1));
 		for (Object[] p : params) {
 			// do not use MAX because we get OutOfMemoryError
-			for (int preset = LZMA2Options.PRESET_MIN; preset <= LZMA2Options.PRESET_MAX - 1; ++preset) {
+			for (int preset = LZMA2Options.PRESET_MIN; preset <= LZMA2Options.PRESET_MAX - 2; ++preset) {
 				Object[] o = new Object[p.length + 1];
 				System.arraycopy(p, 0, o, 0, p.length);
 				o[p.length] = Integer.valueOf(preset);
