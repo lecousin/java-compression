@@ -26,10 +26,10 @@ So far only few compression methods are implemented, more will come...
 [![Codecov](https://codecov.io/gh/lecousin/java-compression/graph/badge.svg)](https://codecov.io/gh/lecousin/java-compression/branch/master)
 
 Modules:
- * deflate [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/deflate/0.1.7)
- * gzip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/gzip/0.1.7)
- * mszip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/mszip/0.1.7)
- * lzma [![Javadoc](https://img.shields.io/badge/javadoc-0.1.7-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/lzma/0.1.7)
+ * deflate [![Javadoc](https://img.shields.io/badge/javadoc-0.1.8-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/deflate/0.1.8)
+ * gzip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.8-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/gzip/0.1.8)
+ * mszip [![Javadoc](https://img.shields.io/badge/javadoc-0.1.8-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/mszip/0.1.8)
+ * lzma [![Javadoc](https://img.shields.io/badge/javadoc-0.1.8-brightgreen.svg)](https://www.javadoc.io/doc/net.lecousin.compression/lzma/0.1.8)
 
 ### Development branch 
 

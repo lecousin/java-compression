@@ -99,68 +99,76 @@ public class DeflateCompressor {
 			return null;
 		}
 		
+		private static class CompressStatus {
+			private CompressStatus(int pos, ByteBuffer writeBuf) {
+				this.pos = pos;
+				this.writeBuf = writeBuf;
+			}
+			
+			private int pos;
+			private ByteBuffer writeBuf;
+		}
+		
 		private void compress() throws IOException {
 			// compress data
 			int nb = readTask.getResult().intValue();
-			int pos = 0;
-			ByteBuffer writeBuf = limit.getBuffer();
+			CompressStatus status = new CompressStatus(0, limit.getBuffer());
 			if (nb <= 0) {
 				// end of data
 				deflater.finish();
 				while (!deflater.finished()) {
-					if (writeBuf == null) writeBuf = limit.getBuffer();
-					nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity() - pos);
-					if (nb <= 0) break;
-					pos += nb;
-					if (pos == writeBuf.capacity()) {
-						writeCompressedData(writeBuf, pos);
-						pos = 0;
-						writeBuf = null;
-					}
+					if (compressLoop(status))
+						break;
 				}
 				deflater.end();
 				deflater = null;
 			} else {
 				deflater.setInput(readBuf, 0, nb);
 				while (!deflater.needsInput() && !end.isCancelled()) {
-					if (writeBuf == null) writeBuf = limit.getBuffer();
-					nb = deflater.deflate(writeBuf.array(), pos, writeBuf.capacity() - pos);
-					if (nb <= 0) break;
-					pos += nb;
-					if (pos == writeBuf.capacity()) {
-						writeCompressedData(writeBuf, pos);
-						pos = 0;
-						writeBuf = null;
-					}
+					if (compressLoop(status))
+						break;
 				}
 			}
 			if (end.isCancelled()) return;
 			if (deflater != null && !deflater.finished()) {
-				writeAndContinue(pos, writeBuf);
+				writeAndContinue(status);
 			} else {
-				writeAndEnd(pos, writeBuf);
+				writeAndEnd(status);
 			}
 		}
 		
-		private void writeAndContinue(int pos, ByteBuffer writeBuf) throws IOException {
+		private boolean compressLoop(CompressStatus status) throws IOException {
+			if (status.writeBuf == null) status.writeBuf = limit.getBuffer();
+			int nb = deflater.deflate(status.writeBuf.array(), status.pos, status.writeBuf.capacity() - status.pos);
+			if (nb <= 0) return true;
+			status.pos += nb;
+			if (status.pos == status.writeBuf.capacity()) {
+				writeCompressedData(status);
+				status.pos = 0;
+				status.writeBuf = null;
+			}
+			return false;
+		}
+		
+		private void writeAndContinue(CompressStatus status) throws IOException {
 			// write compressed data
-			if (pos > 0)
-				writeCompressedData(writeBuf, pos);
-			else if (writeBuf != null)
-				limit.freeBuffer(writeBuf);
+			if (status.pos > 0)
+				writeCompressedData(status);
+			else if (status.writeBuf != null)
+				limit.freeBuffer(status.writeBuf);
 			// next read
 			AsyncSupplier<Integer,IOException> task = input.readAsync(ByteBuffer.wrap(readBuf));
 			task.thenStart(new Compress(input, output, task, readBuf, deflater, limit, getPriority(), end), true);
 		}
 		
-		private void writeAndEnd(int pos, ByteBuffer writeBuf) throws IOException {
+		private void writeAndEnd(CompressStatus status) throws IOException {
 			// write compressed data
 			AsyncSupplier<Integer, IOException> write = null;
-			if (pos > 0)
-				write = writeCompressedData(writeBuf, pos);
+			if (status.pos > 0)
+				write = writeCompressedData(status);
 			else {
-				if (writeBuf != null)
-					limit.freeBuffer(writeBuf);
+				if (status.writeBuf != null)
+					limit.freeBuffer(status.writeBuf);
 				write = limit.getLastPendingOperation();
 			}
 			if (write == null)
@@ -169,11 +177,11 @@ public class DeflateCompressor {
 				write.onDone(end::unblock);
 		}
 		
-		private AsyncSupplier<Integer,IOException> writeCompressedData(ByteBuffer writeBuf, int nb) throws IOException {
-			writeBuf.limit(nb);
-			writeBuf.position(0);
+		private AsyncSupplier<Integer,IOException> writeCompressedData(CompressStatus status) throws IOException {
+			status.writeBuf.limit(status.pos);
+			status.writeBuf.position(0);
 			// may block to wait for writing operations
-			return limit.write(writeBuf);
+			return limit.write(status.writeBuf);
 		}
 	}
 	

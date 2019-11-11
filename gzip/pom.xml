@@ -3,7 +3,7 @@
   <parent>
     <groupId>net.lecousin.compression</groupId>
     <artifactId>parent-pom</artifactId>
-    <version>0.1.7</version>
+    <version>0.1.8</version>
   </parent>
   
   <artifactId>gzip</artifactId>
