@@ -5,4 +5,4 @@ fileExclusions=
 idePrefixKey=
 projectKey=lecousin_java-compression
 serverId=SonarCloud/lecousin
-sqPrefixKey=
+sqPrefixKey=gzip

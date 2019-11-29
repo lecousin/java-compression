@@ -10,7 +10,7 @@ addons:
     token:
       secure: guo+dDlQIHRKpKjnmixm9rODwvY4b1/PMZwZZ+vfFyTgJzOU+dqmfVl4NsFniXcFMDg/WbbV13Syg2Wz4R50+XrXLQPxb+7P0S2Y28IM2HEAV8cuI/ss2BPkAiXOeCljg14v3/rf3SIEhnlK1u23VepP3t8wSe+W7fiiMKwPq6lY4LRfb8kBg2bNW/VykWMsflFznWhpNNWP47DSHkNQiRTE2UjVLZL+Nxq3pKvyarn5Mf2VKunMy5ekVk0+p7bRbjcG6mStlaVrwlY1XmqUhFrhcM6h1OQatYvFPq7dEeL1gXirsH28CZC5m1aVioeFq74L/rZWarbW1R/x3qRLE0Di7w3Bng/KEtaGz7yEeRSuKiVHxJAO/7P3lrE/Rp1BbvDnj8Lry5peEw+JyNws/ahYMOHxr9/q7SXulrZH0sNiuWG9F3TAGFzFbApmF2u+Gf1AirR52fUY9gxvxCPPoaaD8eqv/IBUOti4lg3Wlnqu0JX9R9F1JUMWZtH98SWt49lAgVFfTKeTg6/12tQbStVJUwfHEXpBCFtdXQtbC7kbAcEyQ1TBhznYQekUjE9Hs8+Do27BgEp1ykwwazE7JLYFFrTVKgRpSVdhKFV70PAstCjkEAh341CqRGFVpzte1Tu/zTDJ+KKt486LZD3MRyGe5LNneN+ahYbHovDFfRU=
 
-script: mvn test verify install sonar:sonar -Dsonar.projectKey=lecousin_java-compression -B 
+script: mvn test verify install sonar:sonar -Dsonar.projectKey=lecousin_java-compression -DprojectName=java-compression -B 
   
 after_success:
  - bash <(curl -s https://codecov.io/bash)

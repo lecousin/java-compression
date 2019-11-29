@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.function.Consumer;
 import java.util.zip.DeflaterOutputStream;
@@ -31,19 +30,7 @@ public class TestDeflateReadable extends TestReadable {
 
 	@Parameters(name = "nbBuf = {2}, efficient = {3}")
 	public static Collection<Object[]> parameters() {
-		Collection<Object[]> params = TestIO.UsingGeneratedTestFiles.generateTestCases(false);
-		ArrayList<Object[]> newParams = new ArrayList<>(params.size());
-		for (Object[] a : params) {
-			Object[] b = new Object[a.length + 1];
-			System.arraycopy(a, 0, b, 0, a.length);
-			b[a.length] = Boolean.TRUE;
-			newParams.add(b);
-			b = new Object[a.length + 1];
-			System.arraycopy(a, 0, b, 0, a.length);
-			b[a.length] = Boolean.FALSE;
-			newParams.add(b);
-		}
-		return newParams;
+		return addTestParameter(TestIO.UsingGeneratedTestFiles.generateTestCases(false), Boolean.TRUE, Boolean.FALSE);
 	}
 	
 	public TestDeflateReadable(File testFile, byte[] testBuf, int nbBuf, boolean efficient) {
