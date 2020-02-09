@@ -18,9 +18,9 @@ import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.util.DataUtil;
+import net.lecousin.framework.text.StringUtil;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.StringUtil;
 
 /** GZip decompression. */
 public class GZipReadable extends ConcurrentCloseable<IOException> implements IO.Readable {
@@ -255,7 +255,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 		try {
 			int extraLen;
 			if (currentPos == currentLen)
-				extraLen = DataUtil.readUnsignedShortLittleEndian(input);
+				extraLen = DataUtil.Read16U.LE.read(input);
 			else if (currentPos == currentLen - 1)
 				extraLen = (currentBuffer[currentPos++] & 0xFF) | ((input.readByte() & 0xFF) << 8);
 			else {

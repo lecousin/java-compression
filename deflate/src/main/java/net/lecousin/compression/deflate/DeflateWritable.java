@@ -29,7 +29,7 @@ public class DeflateWritable extends ConcurrentCloseable<IOException> implements
 		this.output = output;
 		this.priority = priority;
 		deflater = new Deflater(level, nowrap);
-		writeOps = new LimitWriteOperations(output, maxPendingWrite);
+		writeOps = new LimitWriteOperations(output, maxPendingWrite, null);
 	}
 	
 	protected IO.Writable output;

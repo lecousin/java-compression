@@ -32,7 +32,7 @@ final class RangeDecoderFromBuffer extends RangeDecoder {
         
         if (input.read() != 0x00) throw new CorruptedInputException();
 
-        code = DataUtil.readIntegerBigEndian(input);
+        code = DataUtil.Read32.BE.read(input);
         range = 0xFFFFFFFF;
 
         // Read the data to the end of the buffer. If the data is corrupt
@@ -55,7 +55,7 @@ final class RangeDecoderFromBuffer extends RangeDecoder {
 	
 	        if (i != 0x00) return new Async<>(new CorruptedInputException());
 	
-	        code = DataUtil.readIntegerBigEndian(input);
+	        code = DataUtil.Read32.BE.read(input);
         } catch (IOException e) {
         	return new Async<>(e);
         }

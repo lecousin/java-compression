@@ -217,8 +217,8 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
         control |= (uncompressedSize - 1) >>> 16;
         output.write((byte)control);
 
-        DataUtil.writeShortBigEndian(output, (short)(uncompressedSize - 1));
-        DataUtil.writeShortBigEndian(output, (short)(compressedSize - 1));
+        DataUtil.Write16.BE.write(output, (short)(uncompressedSize - 1));
+        DataUtil.Write16.BE.write(output, (short)(compressedSize - 1));
 
         if (propsNeeded)
         	output.write((byte)props);
@@ -249,8 +249,8 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
         try { // TODO async ?
 	        output.write((byte)control);
 	
-	        DataUtil.writeShortBigEndian(output, (short)(uncompressedSize - 1));
-	        DataUtil.writeShortBigEndian(output, (short)(compressedSize - 1));
+	        DataUtil.Write16.BE.write(output, (short)(uncompressedSize - 1));
+	        DataUtil.Write16.BE.write(output, (short)(compressedSize - 1));
 	
 	        if (propsNeeded)
 	        	output.write((byte)props);
@@ -269,7 +269,7 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
         while (uncompressedSize > 0) {
             int chunkSize = Math.min(uncompressedSize, COMPRESSED_SIZE_MAX);
             output.write((byte)(dictResetNeeded ? 0x01 : 0x02));
-            DataUtil.writeShortBigEndian(output, (short)(chunkSize - 1));
+            DataUtil.Write16.BE.write(output, (short)(chunkSize - 1));
             lz.copyUncompressedSync(output, uncompressedSize, chunkSize);
             uncompressedSize -= chunkSize;
             dictResetNeeded = false;
@@ -283,7 +283,7 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
             int chunkSize = Math.min(uncompressedSize, COMPRESSED_SIZE_MAX);
             try { // TODO async ?
 	            output.write((byte)(dictResetNeeded ? 0x01 : 0x02));
-	            DataUtil.writeShortBigEndian(output, (short)(chunkSize - 1));
+	            DataUtil.Write16.BE.write(output, (short)(chunkSize - 1));
             } catch (IOException e) {
             	return new Async<>(e);
             }

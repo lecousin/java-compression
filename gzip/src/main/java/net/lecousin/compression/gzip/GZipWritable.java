@@ -93,8 +93,8 @@ public class GZipWritable extends DeflateWritable {
 		writeHeader.blockException(0);
 		super.finishSynch();
 		byte[] trailer = new byte[8];
-		DataUtil.writeUnsignedIntegerLittleEndian(trailer, 0, (int)crc.getValue());
-		DataUtil.writeUnsignedIntegerLittleEndian(trailer, 4, deflater.getTotalIn());
+		DataUtil.Write32U.LE.write(trailer, 0, (int)crc.getValue());
+		DataUtil.Write32U.LE.write(trailer, 4, deflater.getTotalIn());
 		output.writeSync(ByteBuffer.wrap(trailer));
 	}
 
@@ -120,8 +120,8 @@ public class GZipWritable extends DeflateWritable {
 				@Override
 				public Void run() {
 					byte[] trailer = new byte[8];
-					DataUtil.writeUnsignedIntegerLittleEndian(trailer, 0, (int)crc.getValue());
-					DataUtil.writeUnsignedIntegerLittleEndian(trailer, 4, deflater.getTotalIn());
+					DataUtil.Write32U.LE.write(trailer, 0, (int)crc.getValue());
+					DataUtil.Write32U.LE.write(trailer, 4, deflater.getTotalIn());
 					output.writeAsync(ByteBuffer.wrap(trailer)).onDone(result);
 					return null;
 				}
@@ -143,7 +143,7 @@ public class GZipWritable extends DeflateWritable {
 				// flags
 				header[3] = 0;
 				// mtime
-				DataUtil.writeUnsignedIntegerLittleEndian(header, 4, System.currentTimeMillis() / 1000);
+				DataUtil.Write32U.LE.write(header, 4, System.currentTimeMillis() / 1000);
 				// XFL
 				header[8] = 0;
 				// OS

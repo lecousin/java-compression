@@ -10,7 +10,8 @@ import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Writable;
-import net.lecousin.framework.io.util.LimitWriteOperationsReuseBuffers;
+import net.lecousin.framework.io.util.LimitWriteOperations;
+import net.lecousin.framework.memory.ByteArrayCache;
 
 /**
  * Compress a Readable into a Writable using deflate method.
@@ -46,12 +47,13 @@ public class DeflateCompressor {
 	/** Compress from a Readable to a Writable. */
 	public IAsync<Exception> compress(Readable input, Writable output, int bufferSize, int maxBuffers, byte priority) {
 		Deflater deflater = new Deflater(level, nowrap);
-		LimitWriteOperationsReuseBuffers limit = new LimitWriteOperationsReuseBuffers(output, bufferSize, maxBuffers);
-		byte[] bufRead = new byte[bufferSize];
+		ByteArrayCache cache = ByteArrayCache.getInstance();
+		LimitWriteOperations limit = new LimitWriteOperations(output, maxBuffers, buf -> cache.free(buf.array()));
+		byte[] bufRead = cache.get(bufferSize, false);
 		ByteBuffer buffer = ByteBuffer.wrap(bufRead);
 		AsyncSupplier<Integer,IOException> task = input.readAsync(buffer);
 		Async<Exception> end = new Async<>();
-		task.thenStart(new Compress(input, output, task, bufRead, deflater, limit, priority, end), true);
+		task.thenStart(new Compress(input, output, task, bufRead, cache, bufferSize, deflater, limit, priority, end), true);
 		return end;
 	}
 	
@@ -59,12 +61,15 @@ public class DeflateCompressor {
 		@SuppressWarnings("squid:S00107") // 8 parameters
 		private Compress(
 			Readable input, Writable output, AsyncSupplier<Integer,IOException> readTask, byte[] readBuf,
-			Deflater delfater, LimitWriteOperationsReuseBuffers limit, byte priority, Async<Exception> end
+			ByteArrayCache cache, int bufferSize,
+			Deflater delfater, LimitWriteOperations limit, byte priority, Async<Exception> end
 		) {
 			super("Zip compression", priority);
 			this.input = input;
 			this.output = output;
 			this.readTask = readTask;
+			this.cache = cache;
+			this.bufferSize = bufferSize;
 			this.readBuf = readBuf;
 			this.deflater = delfater;
 			this.limit = limit;
@@ -78,9 +83,11 @@ public class DeflateCompressor {
 		private Readable input;
 		private Writable output;
 		private AsyncSupplier<Integer,IOException> readTask;
+		private ByteArrayCache cache;
+		private int bufferSize;
 		private byte[] readBuf;
 		private Deflater deflater;
-		private LimitWriteOperationsReuseBuffers limit;
+		private LimitWriteOperations limit;
 		private Async<Exception> end;
 		
 		@Override
@@ -112,7 +119,7 @@ public class DeflateCompressor {
 		private void compress() throws IOException {
 			// compress data
 			int nb = readTask.getResult().intValue();
-			CompressStatus status = new CompressStatus(0, limit.getBuffer());
+			CompressStatus status = new CompressStatus(0, ByteBuffer.wrap(cache.get(bufferSize, false)));
 			if (nb <= 0) {
 				// end of data
 				deflater.finish();
@@ -138,7 +145,7 @@ public class DeflateCompressor {
 		}
 		
 		private boolean compressLoop(CompressStatus status) throws IOException {
-			if (status.writeBuf == null) status.writeBuf = limit.getBuffer();
+			if (status.writeBuf == null) status.writeBuf = ByteBuffer.wrap(cache.get(bufferSize, false));
 			int nb = deflater.deflate(status.writeBuf.array(), status.pos, status.writeBuf.capacity() - status.pos);
 			if (nb <= 0) return true;
 			status.pos += nb;
@@ -155,10 +162,10 @@ public class DeflateCompressor {
 			if (status.pos > 0)
 				writeCompressedData(status);
 			else if (status.writeBuf != null)
-				limit.freeBuffer(status.writeBuf);
+				cache.free(status.writeBuf.array());
 			// next read
 			AsyncSupplier<Integer,IOException> task = input.readAsync(ByteBuffer.wrap(readBuf));
-			task.thenStart(new Compress(input, output, task, readBuf, deflater, limit, getPriority(), end), true);
+			task.thenStart(new Compress(input, output, task, readBuf, cache, bufferSize, deflater, limit, getPriority(), end), true);
 		}
 		
 		private void writeAndEnd(CompressStatus status) throws IOException {
@@ -168,7 +175,7 @@ public class DeflateCompressor {
 				write = writeCompressedData(status);
 			else {
 				if (status.writeBuf != null)
-					limit.freeBuffer(status.writeBuf);
+					cache.free(status.writeBuf.array());
 				write = limit.getLastPendingOperation();
 			}
 			if (write == null)

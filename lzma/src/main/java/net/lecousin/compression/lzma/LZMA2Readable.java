@@ -335,9 +335,9 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
             isLZMAChunk = true;
 
             uncompressedSize = (control & 0x1F) << 16;
-            uncompressedSize += DataUtil.readUnsignedShortBigEndian(input) + 1;
+            uncompressedSize += DataUtil.Read16U.BE.read(input) + 1;
 
-            int compressedSize = DataUtil.readUnsignedShortBigEndian(input) + 1;
+            int compressedSize = DataUtil.Read16U.BE.read(input) + 1;
 
             if (control >= 0xC0) {
                 needProps = false;
@@ -357,7 +357,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
 
         } else {
             isLZMAChunk = false;
-            uncompressedSize = DataUtil.readUnsignedShortBigEndian(input) + 1;
+            uncompressedSize = DataUtil.Read16U.BE.read(input) + 1;
         }
     }
 
@@ -408,9 +408,9 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         isLZMAChunk = true;
 
         uncompressedSize = (control & 0x1F) << 16;
-        uncompressedSize += DataUtil.readUnsignedShortBigEndian(bufHeader, 0) + 1;
+        uncompressedSize += DataUtil.Read16U.BE.read(bufHeader, 0) + 1;
 
-        int compressedSize = DataUtil.readUnsignedShortBigEndian(bufHeader, 2) + 1;
+        int compressedSize = DataUtil.Read16U.BE.read(bufHeader, 2) + 1;
 
         if (control >= 0xC0) {
             needProps = false;
@@ -430,7 +430,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
     
     private IAsync<IOException> decodeChunkHeaderUncompressedAsync(byte[] buf) {
         isLZMAChunk = false;
-        uncompressedSize = DataUtil.readUnsignedShortBigEndian(buf, 0) + 1;
+        uncompressedSize = DataUtil.Read16U.BE.read(buf, 0) + 1;
         return new Async<>(true);
     }
 
