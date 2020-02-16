@@ -94,8 +94,10 @@ public class GZipWritable extends DeflateWritable {
 	@Override
 	public IAsync<IOException> finishAsync() {
 		Async<IOException> result = new Async<>();
-		if (writeHeader.forwardIfNotSuccessful(result))
-			return finishing = result;
+		if (writeHeader.forwardIfNotSuccessful(result)) {
+			finishing = result;
+			return result;
+		}
 		if (!writeHeader.isDone()) {
 			writeHeader.onDone(() -> {
 				if (!writeHeader.isSuccessful()) {

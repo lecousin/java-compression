@@ -13,6 +13,7 @@
   
   <properties>
   	<sonar.sourceEncoding>UTF-8</sonar.sourceEncoding>
+  	<sonar.test.exclusions>**/src/test/**/*</sonar.test.exclusions>
   </properties>
   
   <modules>

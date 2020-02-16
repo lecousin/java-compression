@@ -14,6 +14,7 @@ import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.LimitWriteOperations;
+import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
 
@@ -30,11 +31,13 @@ public class DeflateWritable extends ConcurrentCloseable<IOException> implements
 		this.priority = priority;
 		deflater = new Deflater(level, nowrap);
 		writeOps = new LimitWriteOperations(output, maxPendingWrite, null);
+		bufferCache = ByteArrayCache.getInstance();
 	}
 	
 	protected IO.Writable output;
 	protected byte priority;
 	protected Deflater deflater;
+	protected ByteArrayCache bufferCache;
 	protected LimitWriteOperations writeOps;
 	protected Async<IOException> finishing = null;
 
@@ -81,18 +84,23 @@ public class DeflateWritable extends ConcurrentCloseable<IOException> implements
 		return new Async<>(true);
 	}
 	
-	@Override
-	public int writeSync(ByteBuffer buffer) throws IOException {
+	private int setInput(ByteBuffer buffer) {
 		int len = buffer.remaining();
 		if (buffer.hasArray()) {
-			deflater.setInput(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
-			buffer.position(buffer.position() + buffer.remaining());
+			deflater.setInput(buffer.array(), buffer.arrayOffset() + buffer.position(), len);
+			buffer.position(buffer.position() + len);
 		} else {
-			byte[] buf = new byte[buffer.remaining()];
+			byte[] buf = new byte[len];
 			buffer.get(buf);
 			deflater.setInput(buf);
 		}
-		byte[] writeBuf = new byte[len > 128 * 1024 ? 128 * 1024 : len];
+		return len;
+	}
+	
+	@Override
+	public int writeSync(ByteBuffer buffer) throws IOException {
+		int len = setInput(buffer);
+		byte[] writeBuf = bufferCache.get(len > 128 * 1024 ? 128 * 1024 : len, true);
 		AsyncSupplier<Integer, IOException> lastWrite = writeOps.getLastPendingOperation();
 		if (lastWrite != null) {
 			lastWrite.blockException(0);
@@ -100,8 +108,9 @@ public class DeflateWritable extends ConcurrentCloseable<IOException> implements
 		while (!deflater.needsInput()) {
 			int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
 			if (nb <= 0) break;
-			output.writeSync(ByteBuffer.wrap(writeBuf, 0, nb));
+			output.writeSync(ByteBuffer.wrap(writeBuf, 0, nb).asReadOnlyBuffer());
 		}
+		bufferCache.free(writeBuf);
 		return len;
 	}
 	
@@ -111,20 +120,14 @@ public class DeflateWritable extends ConcurrentCloseable<IOException> implements
 			@Override
 			public Integer run() throws IOException {
 				if (isCancelled()) return Integer.valueOf(0);
-				int len = buffer.remaining();
-				if (buffer.hasArray()) {
-					deflater.setInput(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
-					buffer.position(buffer.position() + buffer.remaining());
-				} else {
-					byte[] buf = new byte[buffer.remaining()];
-					buffer.get(buf);
-					deflater.setInput(buf);
-				}
+				int len = setInput(buffer);
 				while (!deflater.needsInput()) {
-					byte[] writeBuf = new byte[len > 8192 ? 8192 : len];
+					byte[] writeBuf = bufferCache.get(len > 8192 ? 8192 : len, true);
 					int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
 					if (nb <= 0) break;
-					writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb));
+					AsyncSupplier<Integer, IOException> write = writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb));
+					if (write.hasError())
+						throw write.getError();
 				}
 				return Integer.valueOf(len);
 			}
@@ -147,12 +150,13 @@ public class DeflateWritable extends ConcurrentCloseable<IOException> implements
 			}
 			deflater.finish();
 			if (!deflater.finished()) {
-				byte[] writeBuf = new byte[8192];
+				byte[] writeBuf = bufferCache.get(8192, true);
 				do {
 					int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
 					if (nb <= 0) break;
-					output.writeSync(ByteBuffer.wrap(writeBuf, 0, nb));
+					output.writeSync(ByteBuffer.wrap(writeBuf, 0, nb).asReadOnlyBuffer());
 				} while (!deflater.finished());
+				bufferCache.free(writeBuf);
 			}
 			finishing.unblock();
 		} catch (IOException e) {
@@ -172,7 +176,7 @@ public class DeflateWritable extends ConcurrentCloseable<IOException> implements
 				deflater.finish();
 				if (!deflater.finished()) {
 					do {
-						byte[] writeBuf = new byte[8192];
+						byte[] writeBuf = bufferCache.get(8192, true);
 						int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
 						if (nb <= 0) break;
 						try { lastWrite = writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb)); }

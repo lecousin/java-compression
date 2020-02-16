@@ -23,7 +23,7 @@ public class TestDeflateReadableAsSeekable extends TestReadableSeekable {
 
 	@Parameters(name = "nbBuf = {2}, efficient = {3}")
 	public static Collection<Object[]> parameters() {
-		return addTestParameter(TestIO.UsingGeneratedTestFiles.generateTestCases(false), Boolean.TRUE, Boolean.FALSE);
+		return addTestParameter(TestIO.UsingGeneratedTestFiles.generateTestCases(true), Boolean.TRUE, Boolean.FALSE);
 	}
 
 	
