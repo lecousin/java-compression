@@ -29,7 +29,6 @@ public class TestGZipReadableOneMember extends TestReadable {
 		super(testFile, testBuf, nbBuf);
 	}
 	
-	@SuppressWarnings("resource")
 	@Override
 	protected IO.Readable createReadableFromFile(FileIO.ReadOnly file, long fileSize) throws Exception {
 		File tmp = File.createTempFile("test", "_" + fileSize + "_gzip");

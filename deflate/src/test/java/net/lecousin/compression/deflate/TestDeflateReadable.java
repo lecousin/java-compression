@@ -70,7 +70,7 @@ public class TestDeflateReadable extends TestReadable {
 	
 	@Test
 	public void testErrors() {
-		DeflateReadable.SizeKnown io = new DeflateReadable.SizeKnown(new TestIOError.IOError1(), Task.PRIORITY_NORMAL, 65536, false);
+		DeflateReadable.SizeKnown io = new DeflateReadable.SizeKnown(new TestIOError.ReadableAlwaysError(), Task.PRIORITY_NORMAL, 65536, false);
 		MutableBoolean checkOnDone = new MutableBoolean(false);
 		try {
 			io.readAsync(ByteBuffer.allocate(128), createOnDone(checkOnDone)).blockResult(0);

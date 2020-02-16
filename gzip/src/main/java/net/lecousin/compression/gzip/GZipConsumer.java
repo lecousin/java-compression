@@ -2,7 +2,6 @@ package net.lecousin.compression.gzip;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.function.Consumer;
 import java.util.zip.Inflater;
 
 import net.lecousin.framework.concurrent.Task;
@@ -37,6 +36,11 @@ public class GZipConsumer implements AsyncConsumer<ByteBuffer, IOException> {
 	
 	@Override
 	public IAsync<IOException> end() {
+		if (trailerNeeded < 8 && (header == null || header.pos != 0)) {
+			IOException error = new IOException("Unexpected end of GZip data");
+			unzipConsumer.error(error);
+			return new Async<>(error);
+		}
 		inflater.end();
 		return unzipConsumer.end();
 	}
@@ -48,36 +52,13 @@ public class GZipConsumer implements AsyncConsumer<ByteBuffer, IOException> {
 	}
 	
 	@Override
-	public IAsync<IOException> consume(ByteBuffer data, Consumer<ByteBuffer> onDataRelease) {
+	public IAsync<IOException> consume(ByteBuffer data) {
 		Async<IOException> result = new Async<>();
-		consume(data, result, onDataRelease, true);
+		consume(data, result);
 		return result;
 	}
 	
-	private void consume(ByteBuffer data, Async<IOException> result, Consumer<ByteBuffer> onDataRelease, boolean setInput) {
-		if (header != null) {
-			try {
-				if (!header.consume(data)) {
-					// need data for header
-					if (onDataRelease != null) onDataRelease.accept(data);
-					result.unblock();
-					return;
-				}
-			} catch (IOException e) {
-				if (onDataRelease != null) onDataRelease.accept(data);
-				result.error(e);
-				inflater.end();
-				unzipConsumer.error(e);
-				return;
-			}
-			header = null;
-			if (!data.hasRemaining()) {
-				if (onDataRelease != null) onDataRelease.accept(data);
-				result.unblock();
-				return;
-			}
-		}
-		
+	private void consume(ByteBuffer data, Async<IOException> result) {
 		if (trailerNeeded > 0) {
 			int l = Math.min(trailerNeeded, data.remaining());
 			data.position(data.position() + l);
@@ -85,28 +66,54 @@ public class GZipConsumer implements AsyncConsumer<ByteBuffer, IOException> {
 			if (trailerNeeded == 0) {
 				header = new HeaderConsumer();
 				if (!data.hasRemaining()) {
-					if (onDataRelease != null) onDataRelease.accept(data);
+					cache.free(data);
 					result.unblock();
 					return;
 				}
 			} else {
-				if (!data.hasRemaining() && onDataRelease != null) onDataRelease.accept(data);
+				if (!data.hasRemaining())
+					cache.free(data);
 				result.unblock();
 				return;
 			}
 		}
 		
-		// send data to inflater
-		if (setInput) {
-			if (data.hasArray()) {
-				inflater.setInput(data.array(), data.arrayOffset() + data.position(), data.remaining());
-			} else {
-				byte[] b = new byte[data.remaining()];
-				data.get(b);
-				inflater.setInput(b);
+		if (header != null) {
+			try {
+				if (!header.consume(data)) {
+					// need data for header
+					cache.free(data);
+					result.unblock();
+					return;
+				}
+			} catch (IOException e) {
+				result.error(e);
+				inflater.end();
+				unzipConsumer.error(e);
+				return;
+			}
+			header = null;
+			if (!data.hasRemaining()) {
+				cache.free(data);
+				result.unblock();
+				return;
 			}
 		}
 
+		// send data to inflater
+		if (data.hasArray()) {
+			inflater.setInput(data.array(), data.arrayOffset() + data.position(), data.remaining());
+		} else {
+			byte[] b = new byte[data.remaining()];
+			data.get(b);
+			inflater.setInput(b);
+		}
+		// from here, data must not be freed until needsInput is true
+		
+		doInflate(data, result);
+	}
+	
+	private void doInflate(ByteBuffer data, Async<IOException> result) {
 		// inflate
 		byte[] unzipBuffer = cache.get(unzipBufferSize, true);
 		int n;
@@ -115,45 +122,36 @@ public class GZipConsumer implements AsyncConsumer<ByteBuffer, IOException> {
 			inflater.end();
 			IOException err = new IOException("Invalid GZip data", e);
 			unzipConsumer.error(err);
-			if (onDataRelease != null) onDataRelease.accept(data);
 			result.error(err);
 			return;
 		}
 		if (n > 0) {
-			IAsync<IOException> consume = unzipConsumer.consume(ByteBuffer.wrap(unzipBuffer, 0, n), b -> cache.free(b.array()));
-			consume.thenStart("Consume unzipped buffer", Task.PRIORITY_NORMAL, () -> afterInflate(data, result, onDataRelease), result);
+			IAsync<IOException> consume = unzipConsumer.consume(ByteBuffer.wrap(unzipBuffer, 0, n));
+			consume.thenStart("Continue to unzip data", Task.PRIORITY_NORMAL, () -> afterInflate(data, result), result);
 			return;
 		}
-		afterInflate(data, result, onDataRelease);
+		afterInflate(data, result);
 	}
 	
-	private void afterInflate(ByteBuffer data, Async<IOException> result, Consumer<ByteBuffer> onDataRelease) {
+	private void afterInflate(ByteBuffer data, Async<IOException> result) {
 		data.position(data.limit() - inflater.getRemaining());
         if (inflater.finished() || inflater.needsDictionary()) {
         	trailerNeeded = 8;
         	inflater.reset();
         	if (!data.hasRemaining()) {
-    			if (onDataRelease != null)
-    				onDataRelease.accept(data);
+        		cache.free(data);
         		result.unblock();
         	} else {
-        		consume(data, result, onDataRelease, true);
+        		consume(data, result);
         	}
         	return;
         }
         if (inflater.needsInput()) {
-			if (onDataRelease != null)
-				onDataRelease.accept(data);
+    		cache.free(data);
        		result.unblock();
         	return;
         }
-    	if (!data.hasRemaining()) {
-			if (onDataRelease != null)
-				onDataRelease.accept(data);
-    		result.unblock();
-    	} else {
-    		consume(data, result, onDataRelease, false);
-    	}
+   		doInflate(data, result);
 	}
 	
 	private static class HeaderConsumer {
@@ -174,10 +172,11 @@ public class GZipConsumer implements AsyncConsumer<ByteBuffer, IOException> {
 				}
 				if (pos <= 9) {
 					// skip MTIME + XFL + OS
-					int l = Math.min(6, data.remaining());
+					int r = 6 - (pos - 4);
+					int l = Math.min(r, data.remaining());
 					data.position(data.position() + l);
 					pos += l;
-					if (l < 6) break;
+					if (l < r || !data.hasRemaining()) break;
 				}
 				if (pos == 10) {
 					// extra data
@@ -249,12 +248,12 @@ public class GZipConsumer implements AsyncConsumer<ByteBuffer, IOException> {
 						return false;
 					break;
 				case 1:
-					toSkip = (shortLen << 8) | (data.get() & 0xFF);
+					toSkip = shortLen | ((data.get() & 0xFF) << 8);
 					shortLenPos++;
 					if (!data.hasRemaining())
 						return false;
 					break;
-				case 2:
+				default: //case 2:
 					int l = Math.min(toSkip, data.remaining());
 					data.position(data.position() + l);
 					toSkip -= l;
@@ -266,7 +265,6 @@ public class GZipConsumer implements AsyncConsumer<ByteBuffer, IOException> {
 						return false;
 					}
 					return true;
-				default: return true; // not possible
 				}
 			} while (true);
 		}

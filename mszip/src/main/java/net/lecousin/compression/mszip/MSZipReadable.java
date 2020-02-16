@@ -14,6 +14,7 @@ import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
+import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
 
@@ -366,7 +367,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 	@Override
 	public AsyncSupplier<ByteBuffer, IOException> readNextBufferAsync(Consumer<Pair<ByteBuffer, IOException>> ondone) {
 		AsyncSupplier<ByteBuffer, IOException> result = new AsyncSupplier<>();
-		ByteBuffer buffer = ByteBuffer.allocate(32768);
+		ByteBuffer buffer = ByteBuffer.wrap(ByteArrayCache.getInstance().get(32768, false));
 		AsyncSupplier<Integer, IOException> read = readAsync(buffer);
 		read.onDone(() -> {
 			if (read.hasError()) {
@@ -383,7 +384,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 	
 	@Override
 	public ByteBuffer readNextBuffer() throws IOException {
-		ByteBuffer buffer = ByteBuffer.allocate(32768);
+		ByteBuffer buffer = ByteBuffer.wrap(ByteArrayCache.getInstance().get(32768, false));
 		int nb = readSync(buffer);
 		if (nb <= 0) return null;
 		buffer.flip();

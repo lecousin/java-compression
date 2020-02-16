@@ -61,6 +61,7 @@ public class TestGZipWritable extends LCCoreAbstractTest {
 		tmp.deleteOnExit();
 		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
 		GZipWritable gout = new GZipWritable(fout, Task.PRIORITY_NORMAL, Deflater.BEST_COMPRESSION, 3);
+		gout.canStartWriting();
 		MutableInteger nb = new MutableInteger(0);
 		Async<Exception> done = new Async<>();
 		Mutable<AsyncSupplier<Integer, IOException>> write = new Mutable<>(null);

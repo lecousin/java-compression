@@ -17,7 +17,9 @@ import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
+import net.lecousin.framework.io.data.ByteArray;
 import net.lecousin.framework.io.util.DataUtil;
+import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.text.StringUtil;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
@@ -59,9 +61,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 	private byte priority;
 	private Inflater inflater;
 	private Async<IOException> header;
-	private byte[] currentBuffer = null;
-	private int currentPos = 0;
-	private int currentLen = 0;
+	private ByteArray currentBuffer = null;
 	private IOException error = null;
 	private boolean eof = false;
 	private AsyncSupplier<Integer,IOException> currentRead = null;
@@ -102,33 +102,16 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 			if (read.hasError()) error = read.getError();
 			else if (read.isCancelled()) error = IO.errorCancelled(read.getCancelEvent());
 			else {
+				if (currentBuffer != null)
+					currentBuffer.free();
 				ByteBuffer b = read.getResult();
 				if (b == null) {
 					eof = true;
 					currentBuffer = null;
-					currentPos = 0;
-					currentLen = 0;
 					sp.unblock();
 					return;
 				}
-				if (b.hasArray()) {
-					currentBuffer = b.array();
-					currentPos = b.arrayOffset() + b.position();
-					currentLen = b.arrayOffset() + b.limit();
-				} else {
-					new Task.Cpu<Void, NoException>("Convert native buffer into java buffer", priority) {
-						@Override
-						public Void run() {
-							currentLen = b.remaining();
-							currentBuffer = new byte[currentLen];
-							currentPos = 0;
-							b.get(currentBuffer);
-							sp.unblock();
-							return null;
-						}
-					}.start();
-					return;
-				}
+				currentBuffer = ByteArray.fromByteBuffer(b);
 			}
 			sp.unblock();
 		});
@@ -144,7 +127,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 			header.unblock();
 			return;
 		}
-		if (currentPos == currentLen) {
+		if (currentBuffer == null || !currentBuffer.hasRemaining()) {
 			nextBuffer().onDone(this::readHeader);
 			return;
 		}
@@ -152,32 +135,32 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 	}
 	
 	private void readHeaderTask() {
-		if (currentLen - currentPos < 10 && !readHeaderEnsure10Bytes())
+		if (currentBuffer.remaining() < 10 && !readHeaderEnsure10Bytes())
 			return;
-		int b = currentBuffer[currentPos++] & 0xFF;
+		int b = currentBuffer.get() & 0xFF;
 		if (b != 0x1F) {
 			error = new IOException("Invalid GZIP header: first byte must be 1F, found is "
 				+ StringUtil.encodeHexa((byte)b));
 			header.error(error);
 			return;
 		}
-		b = currentBuffer[currentPos++] & 0xFF;
+		b = currentBuffer.get() & 0xFF;
 		if (b != 0x8B) {
 			error = new IOException("Invalid GZIP header: second byte must be 8B, found is "
 				+ StringUtil.encodeHexa((byte)b));
 			header.error(error);
 			return;
 		}
-		b = currentBuffer[currentPos++] & 0xFF;
+		b = currentBuffer.get() & 0xFF;
 		if (b != 8) {
 			error = new IOException("Unsupported compression method " + b
 				+ " for GZIP, only method 8 (deflate) is supported");
 			header.error(error);
 			return;
 		}
-		b = currentBuffer[currentPos++] & 0xFF;
+		b = currentBuffer.get() & 0xFF;
 		// skip MTIME + XFL + OS
-		currentPos += 6;
+		currentBuffer.moveForward(6);
 		
 		// extra data
 		if ((b & 4) != 0 && !skipExtra())
@@ -194,13 +177,17 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 		// crc
 		if ((b & 2) != 0) {
 			try {
-				if (currentPos == currentLen) {
+				switch (currentBuffer.remaining()) {
+				case 0:
 					if (input.skip(2) != 2) throw new EOFException();
-				} else if (currentPos == currentLen - 1) {
-					currentPos = currentLen;
+					break;
+				case 1:
 					if (input.skip(1) != 1) throw new EOFException();
-				} else {
-					currentPos += 2;
+					currentBuffer.moveForward(1);
+					break;
+				default:
+					currentBuffer.moveForward(2);
+					break;
 				}
 			} catch (IOException e) {
 				error = e;
@@ -213,30 +200,54 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 	}
 	
 	private boolean readHeaderEnsure10Bytes() {
-		byte[] b = new byte[10];
-		int rem = currentLen - currentPos;
-		System.arraycopy(currentBuffer, currentPos, b, 0, rem);
-		int nb;
-		try { nb = IOUtil.readFully(input, b, rem, 10 - rem); }
-		catch (IOException e) {
+		try {
+			do {
+				ByteBuffer next = input.readNextBuffer();
+				if (next == null) throw new EOFException();
+				if (!currentBuffer.hasRemaining()) {
+					currentBuffer.free();
+					currentBuffer = ByteArray.fromByteBuffer(next);
+					if (currentBuffer.remaining() >= 10)
+						return true;
+					continue;
+				}
+				int len = next.remaining();
+				int r = currentBuffer.remaining();
+				if (currentBuffer instanceof ByteArray.Writable &&
+					currentBuffer.getArray().length >= r + len) {
+					// copy into currentBuffer
+					byte[] b = currentBuffer.getArray();
+					if (r > 0)
+						System.arraycopy(b, currentBuffer.getCurrentArrayOffset(), b, 0, r);
+					next.get(b, r, len);
+					currentBuffer = new ByteArray.Writable(b, 0, r + len, true);
+					if (currentBuffer.remaining() >= 10)
+						return true;
+					continue;
+				}
+				byte[] b = ByteArrayCache.getInstance().get(r + len, true);
+				currentBuffer.get(b, 0, r);
+				next.get(b, r, len);
+				ByteArray.Writable ba = new ByteArray.Writable(b, 0, r + len, true);
+				currentBuffer.free();
+				currentBuffer = ba;
+				if (currentBuffer.remaining() >= 10)
+					return true;
+			} while (true);
+		} catch (EOFException e) {
+			error = new IOException("Unexpected end of GZIP data");
+			header.error(error);
+			return false;
+		} catch (IOException e) {
 			error = e;
 			header.error(e);
 			return false;
 		}
-		if (nb != 10 - rem) {
-			error = new IOException("Unexpected end of GZIP data");
-			header.error(error);
-			return false;
-		}
-		currentBuffer = b;
-		currentPos = 0;
-		currentLen = 10;
-		return true;
 	}
 
 	private boolean skipString() {
-		while (currentPos < currentLen) {
-			if (currentBuffer[currentPos++] == 0)
+		while (currentBuffer.hasRemaining()) {
+			if (currentBuffer.get() == 0)
 				return true;
 		}
 		do {
@@ -254,21 +265,26 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 		// skip extra
 		try {
 			int extraLen;
-			if (currentPos == currentLen)
+			switch (currentBuffer.remaining()) {
+			case 0:
 				extraLen = DataUtil.Read16U.LE.read(input);
-			else if (currentPos == currentLen - 1)
-				extraLen = (currentBuffer[currentPos++] & 0xFF) | ((input.readByte() & 0xFF) << 8);
-			else {
-				extraLen = currentBuffer[currentPos++] & 0xFF;
-				extraLen |= (currentBuffer[currentPos++] & 0xFF) << 8;
+				break;
+			case 1:
+				extraLen = (currentBuffer.get() & 0xFF) | ((input.readByte() & 0xFF) << 8);
+				break;
+			default:
+				extraLen = currentBuffer.get() & 0xFF;
+				extraLen |= (currentBuffer.get() & 0xFF) << 8;
+				break;
 			}
-			if (currentLen - currentPos >= extraLen) {
-				currentPos += extraLen;
+			int rem = currentBuffer.remaining();
+			if (rem >= extraLen) {
+				currentBuffer.moveForward(extraLen);
 			} else {
-				int nb = extraLen - (currentLen - currentPos);
-				int skipped = input.skip(nb);
-				if (skipped != nb) throw new EOFException(skipped + " byte(s) of extra data, expected is " + nb);
-				currentPos = currentLen;
+				currentBuffer.goToEnd();
+				rem = extraLen - rem;
+				int skipped = input.skip(rem);
+				if (skipped != rem) throw new EOFException(skipped + " byte(s) of extra data, expected is " + rem);
 			}
 			return true;
 		} catch (IOException e) {
@@ -315,7 +331,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 			return result;
 		}
 		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-		if (currentPos == currentLen) {
+		if (!currentBuffer.hasRemaining()) {
 			currentRead = result;
 			nextBuffer().onDone(() -> readAsync(buffer, ondone, true).forward(result));
 			return operation(result);
@@ -352,8 +368,8 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 				return null;
 			}
 			if (setInput) {
-				inflater.setInput(currentBuffer, currentPos, currentLen - currentPos);
-				currentPos = currentLen;
+				inflater.setInput(currentBuffer.getArray(), currentBuffer.getCurrentArrayOffset(), currentBuffer.remaining());
+				currentBuffer.goToEnd();
 			}
 			byte[] b;
 			int off;
@@ -376,7 +392,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 					if (n > 0)
 						total += n;
 	                if (inflater.finished() || inflater.needsDictionary()) {
-	                	currentPos = currentLen - inflater.getRemaining();
+	                	currentBuffer.setPosition(currentBuffer.length() - inflater.getRemaining());
 	                	skipTrailer();
 	                	header = new Async<>();
 	                	readHeader();
@@ -409,12 +425,12 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 		}
 		
 		private void skipTrailer() {
-			int rem = currentLen - currentPos;
+			int rem = currentBuffer.remaining();
 			if (rem >= 8) {
-				currentPos += 8;
+				currentBuffer.moveForward(8);
 				return;
 			}
-			currentPos = currentLen;
+			currentBuffer.goToEnd();
 			try { input.skip(8 - rem); }
 			catch (IOException e) {
 				// ignore as we don't do anything with the trailer so far

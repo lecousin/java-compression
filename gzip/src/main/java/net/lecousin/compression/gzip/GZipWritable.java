@@ -12,6 +12,7 @@ import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.util.Pair;
 
@@ -46,10 +47,8 @@ public class GZipWritable extends DeflateWritable {
 
 	@Override
 	public AsyncSupplier<Integer, IOException> writeAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
-		if (writeHeader.hasError()) {
-			if (ondone != null) ondone.accept(new Pair<>(null, writeHeader.getError()));
-			return new AsyncSupplier<>(null, writeHeader.getError());
-		}
+		if (writeHeader.hasError())
+			return IOUtil.error(writeHeader.getError(), ondone);
 		if (!writeHeader.isDone()) {
 			AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
 			writeHeader.onDone(() -> writeAsync(buffer, ondone).forward(result));
@@ -61,14 +60,8 @@ public class GZipWritable extends DeflateWritable {
 		operation(new Task.Cpu<Void, NoException>("Update GZip CRC", getPriority()) {
 			@Override
 			public Void run() {
-				if (write.hasError()) {
-					result.error(write.getError());
+				if (write.forwardIfNotSuccessful(result))
 					return null;
-				}
-				if (write.isCancelled()) {
-					result.cancel(write.getCancelEvent());
-					return null;
-				}
 				int nb = write.getResult().intValue();
 				if (nb <= 0) {
 					result.unblockSuccess(write.getResult());
@@ -101,32 +94,26 @@ public class GZipWritable extends DeflateWritable {
 	@Override
 	public IAsync<IOException> finishAsync() {
 		Async<IOException> result = new Async<>();
-		if (writeHeader.hasError()) {
-			result.error(writeHeader.getError());
-			return result;
-		}
+		if (writeHeader.forwardIfNotSuccessful(result))
+			return finishing = result;
 		if (!writeHeader.isDone()) {
 			writeHeader.onDone(() -> {
-				if (writeHeader.hasError()) result.error(writeHeader.getError());
-				else finishAsync().onDone(result);
+				if (!writeHeader.isSuccessful()) {
+					finishing = result;
+					writeHeader.forwardIfNotSuccessful(result);
+					return;
+				}
+				finishAsync().onDone(result);
 			});
 			return operation(result);
 		}
 		IAsync<IOException> finish = super.finishAsync();
-		finish.onDone(() -> {
-			if (finish.hasError()) result.error(finish.getError());
-			else if (finish.isCancelled()) result.cancel(finish.getCancelEvent());
-			else new Task.Cpu<Void, NoException>("Write GZip trailer", getPriority()) {
-				@Override
-				public Void run() {
-					byte[] trailer = new byte[8];
-					DataUtil.Write32U.LE.write(trailer, 0, (int)crc.getValue());
-					DataUtil.Write32U.LE.write(trailer, 4, deflater.getTotalIn());
-					output.writeAsync(ByteBuffer.wrap(trailer)).onDone(result);
-					return null;
-				}
-			}.start();
-		});
+		finish.thenStart(new Task.Cpu.FromRunnable("Write GZip trailer", getPriority(), () -> {
+			byte[] trailer = new byte[8];
+			DataUtil.Write32U.LE.write(trailer, 0, (int)crc.getValue());
+			DataUtil.Write32U.LE.write(trailer, 4, deflater.getTotalIn());
+			output.writeAsync(ByteBuffer.wrap(trailer)).onDone(result);
+		}), result);
 		return operation(result);
 	}
 	
