@@ -289,6 +289,12 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
 		}).start().getOutput();
 	}
 
+    @Override
+    protected void closeResources(Async<IOException> ondone) {
+    	output = null;
+    	ondone.unblock();
+    }
+
 	@Override
     protected IAsync<IOException> closeUnderlyingResources() {
 		if (output != null) {
@@ -301,13 +307,6 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
     	}
     	return new Async<>(true);
 	}
-
-    @Override
-    protected void closeResources(Async<IOException> ondone) {
-    	output = null;
-    	// TODO
-    	ondone.unblock();
-    }
 
 	@Override
 	public IO getWrappedIO() {
