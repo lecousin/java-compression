@@ -445,7 +445,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 
 	@Override
 	public String getSourceDescription() {
-		return "GZIP: " + input.getSourceDescription();
+		return "GZIP: " + (input != null ? input.getSourceDescription() : "null");
 	}
 
 	@Override
