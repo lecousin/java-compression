@@ -13,6 +13,7 @@ import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.io.FileIO;
@@ -67,6 +68,14 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 			out.writeSync(ByteBuffer.wrap(testBuf));
 		out.finishSync();
 		bout.flush();
+		
+		out.getSourceDescription();
+		out.getWrappedIO();
+		out.getPriority();
+		out.setPriority(Priority.NORMAL);
+		out.getTaskManager();
+		out.canStartWriting();
+		
 		out.close();
 		checkFile(tmp);
 	}

@@ -127,6 +127,7 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	
 	@Override
 	public int readSync(ByteBuffer buffer) throws IOException {
+		if (isClosing() || isClosed()) throw new IOException("Deflate stream closed");
 		return readBufferSync(buffer);
 	}
 	
@@ -184,6 +185,10 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 						IOUtil.success(Integer.valueOf(-1), result, ondone);
 						return;
 					}
+					if (isClosing() || isClosed()) {
+						IOUtil.error(new IOException("Deflate stream closed"), result, ondone);
+						return;
+					}
 					if (inflater.needsInput()) {
 						fillAsync(buffer, result, ondone);
 						return;
@@ -203,6 +208,7 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	}
 	
 	private void fillSync() throws IOException {
+		if (isClosing() || isClosed()) throw new IOException("Deflate stream closed");
 		readBuf.clear();
 		int len = input.readSync(readBuf);
 		if (len <= 0)

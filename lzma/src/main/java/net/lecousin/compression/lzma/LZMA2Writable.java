@@ -124,7 +124,12 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
                 IAsync<IOException> write = writeChunkAsync();
                 if (!write.isDone()) {
                 	int d = done;
-                	write.thenStart(TaskUtil.compressionTask(output, () -> writeAsync(buffer, d, result, ondone)), result);
+                	write.thenStart(TaskUtil.compressionTask(output, () -> writeAsync(buffer, d, result, ondone)), () -> {
+                		if (write.isCancelled())
+                			result.cancel(write.getCancelEvent());
+                		else
+                			IOUtil.error(write.getError(), result, ondone);
+                	});
                 	return;
                 }
                 if (!write.isSuccessful()) {

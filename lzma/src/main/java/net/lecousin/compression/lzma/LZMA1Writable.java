@@ -34,19 +34,11 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
 	private long currentUncompressedSize = 0;
 
 	private boolean finished = false;
-	private IOException exception = null;
 
 	private LZMA1Writable(
 		IO.Writable.Buffered output, LZMA2Options options, boolean useHeader, boolean useEndMarker,
 		long expectedUncompressedSize, ByteArrayCache byteArrayCache, IntArrayCache intArrayCache
 	) throws IOException {
-		if (output == null)
-			throw new IllegalArgumentException("output cannot be null");
-
-		// -1 indicates unknown and >= 0 are for known sizes.
-		if (expectedUncompressedSize < -1)
-			throw new IllegalArgumentException("Invalid expected input size (less than -1)");
-
 		this.useEndMarker = useEndMarker;
 		this.expectedUncompressedSize = expectedUncompressedSize;
 
@@ -217,9 +209,6 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
 
 	@Override
 	public int writeSync(ByteBuffer buffer) throws IOException {
-		if (exception != null)
-			throw exception;
-
 		if (finished)
 			throw new IOException("Stream finished or closed");
 
@@ -228,24 +217,17 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
 
 		currentUncompressedSize += buffer.remaining();
 
-		try {
-			int done = 0;
-			while (buffer.hasRemaining()) {
-				int used = lz.fillWindow(buffer);
-	            done += used;
-				lzma.encodeForLZMA1();
-			}
-			return done;
-		} catch (IOException e) {
-			exception = e;
-			throw e;
+		int done = 0;
+		while (buffer.hasRemaining()) {
+			int used = lz.fillWindow(buffer);
+            done += used;
+			lzma.encodeForLZMA1();
 		}
+		return done;
 	}
 	
 	@Override
     public AsyncSupplier<Integer, IOException> writeAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
-		if (exception != null)
-			return IOUtil.error(exception, ondone);
         if (finished)
             return IOUtil.error(new IOException("Stream finished or closed"), ondone);
 		if (expectedUncompressedSize != -1 && expectedUncompressedSize - currentUncompressedSize < buffer.remaining())
@@ -266,7 +248,6 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
             try {
             	lzma.encodeForLZMA1();
             } catch (IOException e) {
-            	exception = e;
             	IOUtil.error(e, result, ondone);
             	return;
             }
@@ -279,26 +260,18 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
 	 */
 	public void finishSync() throws IOException {
 		if (!finished) {
-			if (exception != null)
-				throw exception;
+			if (expectedUncompressedSize != -1 && expectedUncompressedSize != currentUncompressedSize)
+				throw new IOException(
+						"Expected uncompressed size (" + expectedUncompressedSize + ") doesn't equal "
+								+ "the number of bytes written to the stream (" + currentUncompressedSize + ")");
 
-			try {
-				if (expectedUncompressedSize != -1 && expectedUncompressedSize != currentUncompressedSize)
-					throw new IOException(
-							"Expected uncompressed size (" + expectedUncompressedSize + ") doesn't equal "
-									+ "the number of bytes written to the stream (" + currentUncompressedSize + ")");
+			lz.setFinishing();
+			lzma.encodeForLZMA1();
 
-				lz.setFinishing();
-				lzma.encodeForLZMA1();
+			if (useEndMarker)
+				lzma.encodeLZMA1EndMarker();
 
-				if (useEndMarker)
-					lzma.encodeLZMA1EndMarker();
-
-				rc.finish();
-			} catch (IOException e) {
-				exception = e;
-				throw e;
-			}
+			rc.finish();
 
 			finished = true;
 
