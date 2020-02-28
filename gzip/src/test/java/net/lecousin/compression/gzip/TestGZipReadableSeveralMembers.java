@@ -8,7 +8,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.zip.GZIPOutputStream;
 
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.core.test.io.TestReadable;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
@@ -53,13 +53,13 @@ public class TestGZipReadableSeveralMembers extends TestReadable {
 		fout.close();
 		file.closeAsync();
 		for (GZIPOutputStream gout : gouts) try { gout.close(); } catch (Throwable t) {}
-		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.PRIORITY_NORMAL);
+		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.Priority.NORMAL);
 		IO.Readable.Buffered bin;
 		if (fileSize > 0 && fileSize < 10000)
 			bin = new SimpleBufferedReadable(fin, 3); // check we can correctly read the header even with slow IO
 		else
 			bin = new SimpleBufferedReadable(fin, 8192);
-		GZipReadable.SizeKnown gin = new GZipReadable.SizeKnown(bin, Task.PRIORITY_NORMAL, fileSize);
+		GZipReadable.SizeKnown gin = new GZipReadable.SizeKnown(bin, Task.Priority.NORMAL, fileSize);
 		return gin;
 	}
 }

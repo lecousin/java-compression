@@ -6,11 +6,11 @@ import java.util.function.Consumer;
 import java.util.zip.CRC32;
 
 import net.lecousin.compression.deflate.DeflateWritable;
-import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
-import net.lecousin.framework.exception.NoException;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.util.DataUtil;
@@ -22,7 +22,7 @@ import net.lecousin.framework.util.Pair;
 public class GZipWritable extends DeflateWritable {
 
 	/** Constructor. */
-	public GZipWritable(IO.Writable out, byte priority, int level, int maxPendingWrites) {
+	public GZipWritable(IO.Writable out, Priority priority, int level, int maxPendingWrites) {
 		super(out, priority, level, true, maxPendingWrites);
 		writeHeader();
 		crc.reset();
@@ -57,27 +57,24 @@ public class GZipWritable extends DeflateWritable {
 		int initPos = buffer.position();
 		AsyncSupplier<Integer, IOException> write = super.writeAsync(buffer, null);
 		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-		operation(new Task.Cpu<Void, NoException>("Update GZip CRC", getPriority()) {
-			@Override
-			public Void run() {
-				if (write.forwardIfNotSuccessful(result))
-					return null;
-				int nb = write.getResult().intValue();
-				if (nb <= 0) {
-					result.unblockSuccess(write.getResult());
-					return null;
-				}
-				int newPos = buffer.position();
-				int limit = buffer.limit();
-				buffer.position(initPos);
-				buffer.limit(initPos + nb);
-				crc.update(buffer);
-				buffer.limit(limit);
-				buffer.position(newPos);
+		operation(Task.cpu("Update GZip CRC", getPriority(), () -> {
+			if (write.forwardIfNotSuccessful(result))
+				return null;
+			int nb = write.getResult().intValue();
+			if (nb <= 0) {
 				result.unblockSuccess(write.getResult());
 				return null;
 			}
-		}).startOn(write, true);
+			int newPos = buffer.position();
+			int limit = buffer.limit();
+			buffer.position(initPos);
+			buffer.limit(initPos + nb);
+			crc.update(buffer);
+			buffer.limit(limit);
+			buffer.position(newPos);
+			result.unblockSuccess(write.getResult());
+			return null;
+		})).startOn(write, true);
 		return result;
 	}
 
@@ -110,37 +107,35 @@ public class GZipWritable extends DeflateWritable {
 			return operation(result);
 		}
 		IAsync<IOException> finish = super.finishAsync();
-		finish.thenStart(new Task.Cpu.FromRunnable("Write GZip trailer", getPriority(), () -> {
+		finish.thenStart("Write GZip trailer", getPriority(), () -> {
 			byte[] trailer = new byte[8];
 			DataUtil.Write32U.LE.write(trailer, 0, (int)crc.getValue());
 			DataUtil.Write32U.LE.write(trailer, 4, deflater.getTotalIn());
 			output.writeAsync(ByteBuffer.wrap(trailer)).onDone(result);
-		}), result);
+			return null;
+		}, result);
 		return operation(result);
 	}
 	
 	private void writeHeader() {
-		new Task.Cpu<Void, NoException>("Prepare GZip header", getPriority()) {
-			@Override
-			public Void run() {
-				byte[] header = new byte[10];
-				// magic number
-				header[0] = 0x1F;
-				header[1] = (byte)0x8B;
-				// compression method
-				header[2] = 8;
-				// flags
-				header[3] = 0;
-				// mtime
-				DataUtil.Write32U.LE.write(header, 4, System.currentTimeMillis() / 1000);
-				// XFL
-				header[8] = 0;
-				// OS
-				header[9] = 0;
-				output.writeAsync(ByteBuffer.wrap(header)).onDone(writeHeader);
-				return null;
-			}
-		}.start();
+		Task.cpu("Prepare GZip header", getPriority(), () -> {
+			byte[] header = new byte[10];
+			// magic number
+			header[0] = 0x1F;
+			header[1] = (byte)0x8B;
+			// compression method
+			header[2] = 8;
+			// flags
+			header[3] = 0;
+			// mtime
+			DataUtil.Write32U.LE.write(header, 4, System.currentTimeMillis() / 1000);
+			// XFL
+			header[8] = 0;
+			// OS
+			header[9] = 0;
+			output.writeAsync(ByteBuffer.wrap(header)).onDone(writeHeader);
+			return null;
+		}).start();
 	}
 	
 }

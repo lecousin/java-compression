@@ -9,17 +9,20 @@ import java.util.zip.Deflater;
 import java.util.zip.InflaterInputStream;
 
 import net.lecousin.framework.collections.ArrayUtil;
-import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIO;
+import net.lecousin.framework.core.test.io.TestIOError;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.mutable.Mutable;
 import net.lecousin.framework.mutable.MutableInteger;
 
+import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized.Parameters;
@@ -40,27 +43,43 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 	private byte[] testBuf;
 	private int nbBuf;
 	
-	@SuppressWarnings("resource")
+	@Test
+	public void testBasics() throws Exception {
+		Assume.assumeTrue(nbBuf == 0);
+		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
+		tmp.deleteOnExit();
+		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
+		@SuppressWarnings("resource")
+		DeflateWritable gout = new DeflateWritable(fout, Task.Priority.NORMAL, Deflater.BEST_COMPRESSION, false, 3);
+		gout.getTaskManager();
+		gout.getWrappedIO();
+		gout.getSourceDescription();
+		gout.setPriority(Task.Priority.IMPORTANT);
+		Assert.assertEquals(Task.Priority.IMPORTANT, gout.getPriority());
+		gout.canStartWriting();
+		gout.closeAsync();
+	}
+	
 	@Test
 	public void testCompressSyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
 		tmp.deleteOnExit();
-		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
-		DeflateWritable gout = new DeflateWritable(fout, Task.PRIORITY_NORMAL, Deflater.BEST_COMPRESSION, false, 3);
+		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
+		DeflateWritable gout = new DeflateWritable(fout, Task.Priority.NORMAL, Deflater.BEST_COMPRESSION, false, 3);
 		for (int i = 0; i < nbBuf; ++i)
 			gout.writeSync(ByteBuffer.wrap(testBuf));
 		gout.finishSynch();
+		gout.close();
 		gout.close();
 		checkFile(tmp);
 	}
 	
 	@Test
-	@SuppressWarnings("resource")
 	public void testCompressAsyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
 		tmp.deleteOnExit();
-		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
-		DeflateWritable gout = new DeflateWritable(fout, Task.PRIORITY_NORMAL, Deflater.BEST_COMPRESSION, false, 3);
+		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
+		DeflateWritable gout = new DeflateWritable(fout, Task.Priority.NORMAL, Deflater.BEST_COMPRESSION, false, 3);
 		MutableInteger nb = new MutableInteger(0);
 		Async<Exception> done = new Async<>();
 		Mutable<AsyncSupplier<Integer, IOException>> write = new Mutable<>(null);
@@ -134,6 +153,34 @@ public class TestDeflateWritable extends LCCoreAbstractTest {
 		if (nb > 0)
 			throw new IOException("Data can be read after the end: " + nb);
 		gin.close();
+	}
+	
+	@SuppressWarnings("resource")
+	@Test
+	public void testWriteError() throws Exception {
+		Assume.assumeTrue(nbBuf == 0);
+		DeflateWritable gout = new DeflateWritable(new TestIOError.WritableAlwaysError(), Task.Priority.NORMAL, Deflater.BEST_COMPRESSION, false, 3);
+		gout.writeAsync(ByteBuffer.allocate(1));
+		try {
+			gout.finishSynch();
+			throw new AssertionError();
+		} catch (IOException e) {
+			// ok
+		}
+		try {
+			gout.close();
+		} catch (IOException e) {
+			// ok
+		}
+		
+		gout = new DeflateWritable(new TestIOError.WritableAlwaysError(), Task.Priority.NORMAL, Deflater.BEST_COMPRESSION, false, 3);
+		gout.writeAsync(ByteBuffer.allocate(1));
+		try {
+			gout.closeAsync().blockThrow(0);
+			throw new AssertionError();
+		} catch (IOException e) {
+			// ok
+		}
 	}
 	
 }

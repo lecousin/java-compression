@@ -5,7 +5,7 @@ import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.core.test.io.TestReadableSeekable;
 import net.lecousin.framework.io.FileIO;
@@ -50,7 +50,7 @@ public class TestLZMA2ReadableAsSeekable extends TestReadableSeekable {
 		fout.flush();
 		fout.close();
 		file.closeAsync();
-		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.PRIORITY_NORMAL);
+		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.Priority.NORMAL);
 		SimpleBufferedReadable bin = new SimpleBufferedReadable(fin, 8192);
 		LZMA2Readable in = new LZMA2Readable(bin, options.getDictSize());
 		return new ReadableToSeekable(in, 4096);

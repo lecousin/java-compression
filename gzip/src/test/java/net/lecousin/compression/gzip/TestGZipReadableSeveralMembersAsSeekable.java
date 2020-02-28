@@ -8,7 +8,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.zip.GZIPOutputStream;
 
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.core.test.io.TestReadableSeekable;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
@@ -54,9 +54,9 @@ public class TestGZipReadableSeveralMembersAsSeekable extends TestReadableSeekab
 		fout.close();
 		file.closeAsync();
 		for (GZIPOutputStream gout : gouts) try { gout.close(); } catch (Throwable t) {}
-		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.PRIORITY_NORMAL);
+		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.Priority.NORMAL);
 		SimpleBufferedReadable bin = new SimpleBufferedReadable(fin, 8192);
-		GZipReadable.SizeKnown gin = new GZipReadable.SizeKnown(bin, Task.PRIORITY_NORMAL, fileSize);
+		GZipReadable.SizeKnown gin = new GZipReadable.SizeKnown(bin, Task.Priority.NORMAL, fileSize);
 		return new ReadableToSeekable(gin, 4096);
 	}
 }

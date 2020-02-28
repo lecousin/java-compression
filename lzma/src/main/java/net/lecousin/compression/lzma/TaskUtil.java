@@ -4,9 +4,11 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.util.function.Supplier;
 
-import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.exception.NoException;
+import net.lecousin.framework.concurrent.Executable;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
 
@@ -16,12 +18,13 @@ final class TaskUtil {
 		// no instance
 	}
 	
-	public static Task.Cpu.FromRunnable decompressionTask(IO.Readable input, Runnable r, IAsync<IOException> onerror) {
-		return new Task.Cpu.FromRunnable("LZMA Decompression", input.getPriority(), () -> {
+	public static Task<Void, NoException> decompressionTask(IO.Readable input, Runnable r, IAsync<IOException> onerror) {
+		return Task.cpu("LZMA Decompression", input.getPriority(), () -> {
 			try { r.run(); }
 			catch (Exception e) {
 				onerror.error(IO.error(e));
 			}
+			return null;
 		});
 	}
 
@@ -47,8 +50,8 @@ final class TaskUtil {
         return sp;
 	}
 	
-	public static Task.Cpu.FromRunnable compressionTask(IO.Writable output, Runnable r) {
-		return new Task.Cpu.FromRunnable("LZMA Compression", output.getPriority(), r);
+	public static Task<Void, NoException> compressionTask(IO.Writable output, Runnable r) {
+		return Task.cpu("LZMA Compression", output.getPriority(), new Executable.FromRunnable(r));
 	}
 
 	public static Async<IOException> continueCompression(IO.Writable.Buffered output, IAsync<IOException> waiting, Supplier<IAsync<IOException>> continueProvider) {

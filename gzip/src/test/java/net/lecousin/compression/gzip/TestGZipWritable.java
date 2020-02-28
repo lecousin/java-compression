@@ -9,10 +9,10 @@ import java.util.zip.Deflater;
 import java.util.zip.GZIPInputStream;
 
 import net.lecousin.framework.collections.ArrayUtil;
-import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
@@ -45,8 +45,8 @@ public class TestGZipWritable extends LCCoreAbstractTest {
 	public void testCompressSyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_gzip_writable");
 		tmp.deleteOnExit();
-		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
-		GZipWritable gout = new GZipWritable(fout, Task.PRIORITY_NORMAL, Deflater.BEST_COMPRESSION, 3);
+		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
+		GZipWritable gout = new GZipWritable(fout, Task.Priority.NORMAL, Deflater.BEST_COMPRESSION, 3);
 		for (int i = 0; i < nbBuf; ++i)
 			gout.writeSync(ByteBuffer.wrap(testBuf));
 		gout.finishSynch();
@@ -59,8 +59,8 @@ public class TestGZipWritable extends LCCoreAbstractTest {
 	public void testCompressAsyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_gzip_writable");
 		tmp.deleteOnExit();
-		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
-		GZipWritable gout = new GZipWritable(fout, Task.PRIORITY_NORMAL, Deflater.BEST_COMPRESSION, 3);
+		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
+		GZipWritable gout = new GZipWritable(fout, Task.Priority.NORMAL, Deflater.BEST_COMPRESSION, 3);
 		gout.canStartWriting();
 		MutableInteger nb = new MutableInteger(0);
 		Async<Exception> done = new Async<>();

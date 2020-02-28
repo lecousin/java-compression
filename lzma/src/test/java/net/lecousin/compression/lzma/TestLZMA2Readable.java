@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.core.test.io.TestReadable;
 import net.lecousin.framework.io.FileIO;
@@ -27,9 +27,15 @@ public class TestLZMA2Readable extends TestReadable {
 		Collection<Object[]> params = TestIO.UsingGeneratedTestFiles.generateTestCases(false);
 		ArrayList<Object[]> list = new ArrayList<>(params.size() * (LZMA2Options.PRESET_MAX - LZMA2Options.PRESET_MIN + 1));
 		for (Object[] p : params) {
+			// use preset -1 to say no compression
+			Object[] o = new Object[p.length + 1];
+			System.arraycopy(p, 0, o, 0, p.length);
+			o[p.length] = Integer.valueOf(-1);
+			list.add(o);
+			
 			// do not use MAX because we get OutOfMemoryError
 			for (int preset = LZMA2Options.PRESET_MIN; preset <= LZMA2Options.PRESET_MAX - 2; ++preset) {
-				Object[] o = new Object[p.length + 1];
+				o = new Object[p.length + 1];
 				System.arraycopy(p, 0, o, 0, p.length);
 				o[p.length] = Integer.valueOf(preset);
 				list.add(o);
@@ -50,7 +56,13 @@ public class TestLZMA2Readable extends TestReadable {
 		File tmp = File.createTempFile("test", "_" + fileSize + "_lzma2");
 		tmp.deleteOnExit();
 		FileOutputStream fout = new FileOutputStream(tmp);
-		org.tukaani.xz.LZMA2Options options = new org.tukaani.xz.LZMA2Options(preset);
+		org.tukaani.xz.LZMA2Options options;
+		if (preset == -1) {
+			options = new org.tukaani.xz.LZMA2Options(0);
+			options.setMode(org.tukaani.xz.LZMA2Options.MODE_UNCOMPRESSED);
+		} else {
+			options = new org.tukaani.xz.LZMA2Options(preset);
+		}
 		FinishableOutputStream out = options.getOutputStream(new FinishableWrapperOutputStream(fout));
 		byte[] buffer = new byte[65536];
 		while (true) {
@@ -64,7 +76,7 @@ public class TestLZMA2Readable extends TestReadable {
 		fout.flush();
 		fout.close();
 		file.closeAsync();
-		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.PRIORITY_NORMAL);
+		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.Priority.NORMAL);
 		SimpleBufferedReadable bin = new SimpleBufferedReadable(fin, 8192);
 		LZMA2Readable in = new LZMA2Readable(bin, options.getDictSize());
 		return in;

@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.zip.GZIPOutputStream;
 
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.core.test.io.TestReadable;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
@@ -47,9 +47,9 @@ public class TestGZipReadableOneMember extends TestReadable {
 		fout.flush();
 		fout.close();
 		file.closeAsync();
-		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.PRIORITY_NORMAL);
+		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.Priority.NORMAL);
 		SimpleBufferedReadable bin = new SimpleBufferedReadable(fin, 8192);
-		GZipReadable.SizeKnown gin = new GZipReadable.SizeKnown(bin, Task.PRIORITY_NORMAL, fileSize);
+		GZipReadable.SizeKnown gin = new GZipReadable.SizeKnown(bin, Task.Priority.NORMAL, fileSize);
 		return gin;
 	}
 }

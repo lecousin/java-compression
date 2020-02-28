@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.zip.Inflater;
 
-import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.concurrent.util.AsyncConsumer;
@@ -127,7 +126,7 @@ public class GZipConsumer implements AsyncConsumer<ByteBuffer, IOException> {
 		}
 		if (n > 0) {
 			IAsync<IOException> consume = unzipConsumer.consume(ByteBuffer.wrap(unzipBuffer, 0, n));
-			consume.thenStart("Continue to unzip data", Task.PRIORITY_NORMAL, () -> afterInflate(data, result), result);
+			consume.thenStart("Continue to unzip data", null, () -> afterInflate(data, result), result);
 			return;
 		}
 		afterInflate(data, result);

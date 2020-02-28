@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.zip.Deflater;
 
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.Executable;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Writable;
 import net.lecousin.framework.io.util.LimitWriteOperations;
@@ -44,8 +46,10 @@ public class DeflateCompressor {
 	private int level;
 	private boolean nowrap;
 	
+	private static final String TASK_NAME = "Zip compression";
+	
 	/** Compress from a Readable to a Writable. */
-	public IAsync<Exception> compress(Readable input, Writable output, int bufferSize, int maxBuffers, byte priority) {
+	public IAsync<Exception> compress(Readable input, Writable output, int bufferSize, int maxBuffers, Priority priority) {
 		Deflater deflater = new Deflater(level, nowrap);
 		ByteArrayCache cache = ByteArrayCache.getInstance();
 		LimitWriteOperations limit = new LimitWriteOperations(output, maxBuffers, buf -> cache.free(buf.array()));
@@ -53,18 +57,20 @@ public class DeflateCompressor {
 		ByteBuffer buffer = ByteBuffer.wrap(bufRead);
 		AsyncSupplier<Integer,IOException> task = input.readAsync(buffer);
 		Async<Exception> end = new Async<>();
-		task.thenStart(new Compress(input, output, task, bufRead, cache, bufferSize, deflater, limit, priority, end), true);
+		Task<Void, Exception> compress = Task.cpu(
+			TASK_NAME, priority, new Compress(input, output, task, bufRead, cache, bufferSize, deflater, limit, end));
+		end.onCancel(compress::cancel);
+		task.thenStart(compress, true);
 		return end;
 	}
 	
-	private static class Compress extends Task.Cpu<Void,Exception> {
+	private static class Compress implements Executable<Void, Exception> {
 		@SuppressWarnings("squid:S00107") // 8 parameters
 		private Compress(
 			Readable input, Writable output, AsyncSupplier<Integer,IOException> readTask, byte[] readBuf,
 			ByteArrayCache cache, int bufferSize,
-			Deflater delfater, LimitWriteOperations limit, byte priority, Async<Exception> end
+			Deflater delfater, LimitWriteOperations limit, Async<Exception> end
 		) {
-			super("Zip compression", priority);
 			this.input = input;
 			this.output = output;
 			this.readTask = readTask;
@@ -74,10 +80,7 @@ public class DeflateCompressor {
 			this.deflater = delfater;
 			this.limit = limit;
 			this.end = end;
-			end.onCancel(event -> {
-				readTask.unblockCancel(event);
-				Compress.this.cancel(event);
-			});
+			end.onCancel(readTask::cancel);
 		}
 		
 		private Readable input;
@@ -91,7 +94,7 @@ public class DeflateCompressor {
 		private Async<Exception> end;
 		
 		@Override
-		public Void run() throws Exception {
+		public Void execute() throws Exception {
 			if (readTask.isCancelled() || end.isCancelled()) return null;
 			if (!readTask.isSuccessful()) {
 				end.error(readTask.getError());
@@ -165,7 +168,10 @@ public class DeflateCompressor {
 				cache.free(status.writeBuf.array());
 			// next read
 			AsyncSupplier<Integer,IOException> task = input.readAsync(ByteBuffer.wrap(readBuf));
-			task.thenStart(new Compress(input, output, task, readBuf, cache, bufferSize, deflater, limit, getPriority(), end), true);
+			Task<Void, Exception> compress = Task.cpu(
+				TASK_NAME, new Compress(input, output, task, readBuf, cache, bufferSize, deflater, limit, end));
+			end.onCancel(compress::cancel);
+			task.thenStart(compress, true);
 		}
 		
 		private void writeAndEnd(CompressStatus status) throws IOException {
@@ -181,14 +187,16 @@ public class DeflateCompressor {
 			if (write == null)
 				end.unblock();
 			else
-				write.onDone(end::unblock);
+				write.onDone(end, e -> e);
 		}
 		
 		private AsyncSupplier<Integer,IOException> writeCompressedData(CompressStatus status) throws IOException {
 			status.writeBuf.limit(status.pos);
 			status.writeBuf.position(0);
 			// may block to wait for writing operations
-			return limit.write(status.writeBuf);
+			AsyncSupplier<Integer,IOException> res = limit.write(status.writeBuf);
+			if (res.hasError()) throw res.getError();
+			return res;
 		}
 	}
 	

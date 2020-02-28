@@ -6,12 +6,13 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.util.function.Consumer;
 
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.TaskManager;
-import net.lecousin.framework.concurrent.Threading;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.threads.TaskManager;
+import net.lecousin.framework.concurrent.threads.Threading;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.buffering.PreBufferedReadable;
@@ -511,13 +512,13 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
 	}
 
 	@Override
-	public void setPriority(byte priority) {
+	public void setPriority(Priority priority) {
 		if (input != null) input.setPriority(priority);
 	}
 
 	@Override
-	public byte getPriority() {
-		return input != null ? input.getPriority() : Task.PRIORITY_NORMAL;
+	public Priority getPriority() {
+		return input != null ? input.getPriority() : Task.Priority.NORMAL;
 	}
 
 	@Override

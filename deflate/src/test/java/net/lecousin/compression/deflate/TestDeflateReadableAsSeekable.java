@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.zip.DeflaterOutputStream;
 
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.core.test.io.TestReadableSeekable;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
@@ -52,9 +52,9 @@ public class TestDeflateReadableAsSeekable extends TestReadableSeekable {
 		fout.flush();
 		fout.close();
 		file.closeAsync();
-		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.PRIORITY_NORMAL);
+		FileIO.ReadOnly fin = new FileIO.ReadOnly(tmp, Task.Priority.NORMAL);
 		SimpleBufferedReadable bin = new SimpleBufferedReadable(fin, efficient ? 8192 : fileSize < 128000 ? 2 : 16);
-		DeflateReadable.SizeKnown gin = new DeflateReadable.SizeKnown(bin, Task.PRIORITY_NORMAL, fileSize, false);
+		DeflateReadable.SizeKnown gin = new DeflateReadable.SizeKnown(bin, Task.Priority.NORMAL, fileSize, false, efficient ? 8192 : fileSize < 128000 ? 2 : 16);
 		return new ReadableToSeekable(gin, efficient ? 4096 : fileSize < 128000 ? 8 : 64);
 	}
 	

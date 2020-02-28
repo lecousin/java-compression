@@ -5,9 +5,9 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 
 import net.lecousin.framework.application.LCCore;
-import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.concurrent.util.AsyncConsumer;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
@@ -43,10 +43,10 @@ public class TestGZipConsumerWithGZipReadable extends LCCoreAbstractTest {
 	}
 	
 	static void testFile(String filename, int bufferSize) throws Exception {
-		IO.Readable source = LCCore.getApplication().getResource(filename, Task.PRIORITY_NORMAL);
+		IO.Readable source = LCCore.getApplication().getResource(filename, Task.Priority.NORMAL);
 		IO.Readable.Buffered bin = new SimpleBufferedReadable(source, bufferSize);
-		ByteBuffersIO fromIO = new ByteBuffersIO(true, "test", Task.PRIORITY_NORMAL);
-		try (GZipReadable gzip = new GZipReadable(bin, Task.PRIORITY_NORMAL)) {
+		ByteBuffersIO fromIO = new ByteBuffersIO(true, "test", Task.Priority.NORMAL);
+		try (GZipReadable gzip = new GZipReadable(bin, Task.Priority.NORMAL)) {
 			byte[] buf = new byte[4096];
 			do {
 				ByteBuffer bb = ByteBuffer.wrap(buf);
@@ -60,8 +60,8 @@ public class TestGZipConsumerWithGZipReadable extends LCCoreAbstractTest {
 			} while (true);
 		}
 		
-		source = LCCore.getApplication().getResource(filename, Task.PRIORITY_NORMAL);
-		ByteBuffersIO fromConsumer = new ByteBuffersIO(true, "test", Task.PRIORITY_NORMAL);
+		source = LCCore.getApplication().getResource(filename, Task.Priority.NORMAL);
+		ByteBuffersIO fromConsumer = new ByteBuffersIO(true, "test", Task.Priority.NORMAL);
 		AsyncConsumer<ByteBuffer, IOException> consumer = new AsyncConsumer<ByteBuffer, IOException>() {
 			@Override
 			public IAsync<IOException> consume(ByteBuffer data) {
@@ -75,7 +75,7 @@ public class TestGZipConsumerWithGZipReadable extends LCCoreAbstractTest {
 			public void error(IOException error) {
 			}
 		};
-		source.createProducer(bufferSize, true, true).toConsumer(new GZipConsumer(bufferSize, consumer), "test", Task.PRIORITY_NORMAL).blockThrow(0);
+		source.createProducer(bufferSize, true, true).toConsumer(new GZipConsumer(bufferSize, consumer), "test", Task.Priority.NORMAL).blockThrow(0);
 		
 		fromIO.seekSync(SeekType.FROM_BEGINNING, 0);
 		fromConsumer.seekSync(SeekType.FROM_BEGINNING, 0);

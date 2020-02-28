@@ -5,13 +5,12 @@ import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 import java.util.zip.Inflater;
 
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.TaskManager;
-import net.lecousin.framework.concurrent.Threading;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
-import net.lecousin.framework.exception.NoException;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.threads.TaskManager;
+import net.lecousin.framework.concurrent.threads.Threading;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.memory.ByteArrayCache;
@@ -45,7 +44,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 	/** MSZipReadable with a known uncompressed size. */
 	public static class SizeKnown extends MSZipReadable implements IO.KnownSize {
 		/** Constructor. */
-		public SizeKnown(BlockProvider input, byte priority, long uncompressedSize) {
+		public SizeKnown(BlockProvider input, Priority priority, long uncompressedSize) {
 			super(input, priority);
 			this.uncompressedSize = uncompressedSize;
 		}
@@ -64,7 +63,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 	}
 	
 	/** Constructor. */
-	public MSZipReadable(BlockProvider input, byte priority) {
+	public MSZipReadable(BlockProvider input, Priority priority) {
 		this.input = input;
 		this.priority = priority;
 		nextUncompress = null;
@@ -72,21 +71,13 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 	}
 	
 	private BlockProvider input;
-	private byte priority;
+	private Priority priority;
 	private BlockUncompressor uncompress;
 	private BlockUncompressor nextUncompress;
 	private IOException error = null;
 	private boolean eof = false;
 	
 	private class BlockUncompressor {
-		public BlockUncompressor(int blockIndex) {
-			inflater = new Inflater(true);
-			read = input.readNextBlock();
-			dataReady = new Async<>();
-			this.blockIndex = blockIndex;
-			uncompressed = new byte[32768];
-			read.thenStart(new StartUncompress(), true);
-		}
 		
 		private int blockIndex;
 		private Inflater inflater;
@@ -95,14 +86,14 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 		private int pos = 0;
 		private int size = 0;
 		private Async<IOException> dataReady;
-		
-		private class StartUncompress extends Task.Cpu<Void,NoException> {
-			private StartUncompress() {
-				super("Start uncompressing MSZIP block", priority);
-			}
-			
-			@Override
-			public Void run() {
+
+		public BlockUncompressor(int blockIndex) {
+			inflater = new Inflater(true);
+			read = input.readNextBlock();
+			dataReady = new Async<>();
+			this.blockIndex = blockIndex;
+			uncompressed = new byte[32768];
+			read.thenStart("Start uncompressing MSZIP block", priority, () -> {
 				if (read.hasError()) {
 					error = read.getError();
 					dataReady.unblock();
@@ -163,7 +154,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 					dataReady.unblock();
 					return null;
 				}
-			}
+			}, true);
 		}
 	}
 	
@@ -324,37 +315,34 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 		}
 		// wait for current block to have some data uncompressed
 		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-		uncompress.dataReady.thenStart(new Task.Cpu<Void,NoException>("Read data from MSZip", priority) {
-			@Override
-			public Void run() {
-				if (error != null) {
-					if (ondone != null) ondone.accept(new Pair<>(null, error));
-					result.error(error);
-					return null;
-				}
-				if (uncompress.pos < uncompress.size) {
-					int l = uncompress.size - uncompress.pos;
-					if (l > buffer.remaining()) l = buffer.remaining();
-					buffer.put(uncompress.uncompressed, uncompress.pos, l);
-					uncompress.pos += l;
-					if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(l), null));
-					result.unblockSuccess(Integer.valueOf(l));
-					return null;
-				}
-				// current block is completely read
-				if (nextUncompress == null) {
-					if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
-					result.unblockSuccess(Integer.valueOf(-1));
-					return null;
-				}
-				synchronized (MSZipReadable.this) {
-					uncompress = nextUncompress;
-					if (!eof)
-						nextUncompress = new BlockUncompressor(uncompress.blockIndex + 1);
-				}
-				readAsync(buffer, ondone).forward(result);
+		uncompress.dataReady.thenStart("Read data from MSZip", priority, () -> {
+			if (error != null) {
+				if (ondone != null) ondone.accept(new Pair<>(null, error));
+				result.error(error);
 				return null;
 			}
+			if (uncompress.pos < uncompress.size) {
+				int l = uncompress.size - uncompress.pos;
+				if (l > buffer.remaining()) l = buffer.remaining();
+				buffer.put(uncompress.uncompressed, uncompress.pos, l);
+				uncompress.pos += l;
+				if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(l), null));
+				result.unblockSuccess(Integer.valueOf(l));
+				return null;
+			}
+			// current block is completely read
+			if (nextUncompress == null) {
+				if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
+				result.unblockSuccess(Integer.valueOf(-1));
+				return null;
+			}
+			synchronized (MSZipReadable.this) {
+				uncompress = nextUncompress;
+				if (!eof)
+					nextUncompress = new BlockUncompressor(uncompress.blockIndex + 1);
+			}
+			readAsync(buffer, ondone).forward(result);
+			return null;
 		}, true);
 		return operation(result);
 	}
@@ -417,12 +405,12 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 	}
 
 	@Override
-	public byte getPriority() {
+	public Priority getPriority() {
 		return priority;
 	}
 
 	@Override
-	public void setPriority(byte priority) {
+	public void setPriority(Priority priority) {
 		this.priority = priority;
 	}
 

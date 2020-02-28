@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIOError;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
@@ -68,7 +68,7 @@ public class TestGZipReadableErrors extends LCCoreAbstractTest {
 		Assume.assumeTrue(parameters().iterator().next()[0].equals(filename));
 		TestIOError.ReadableAlwaysError io = new TestIOError.ReadableAlwaysError();
 		IO.Readable.Buffered bin = new SimpleBufferedReadable(io, bufferSize);
-		try (GZipReadable gzip = new GZipReadable(bin, Task.PRIORITY_NORMAL)) {
+		try (GZipReadable gzip = new GZipReadable(bin, Task.Priority.NORMAL)) {
 			byte[] buf = new byte[4096];
 			while (gzip.readFullySync(ByteBuffer.wrap(buf)) == 4096);
 		} catch (IOException e) {
@@ -81,7 +81,7 @@ public class TestGZipReadableErrors extends LCCoreAbstractTest {
 		Assume.assumeTrue(parameters().iterator().next()[0].equals(filename));
 		TestIOError.ReadableErrorAfterBeginning io = new TestIOError.ReadableErrorAfterBeginning(new ByteArray(new byte[] { 0x1F }));
 		IO.Readable.Buffered bin = new SimpleBufferedReadable(io, bufferSize);
-		try (GZipReadable gzip = new GZipReadable(bin, Task.PRIORITY_NORMAL)) {
+		try (GZipReadable gzip = new GZipReadable(bin, Task.Priority.NORMAL)) {
 			byte[] buf = new byte[4096];
 			while (gzip.readFullySync(ByteBuffer.wrap(buf)) == 4096);
 		} catch (IOException e) {

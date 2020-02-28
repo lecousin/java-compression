@@ -7,7 +7,7 @@ import java.util.Collection;
 import java.util.zip.InflaterInputStream;
 
 import net.lecousin.framework.collections.ArrayUtil;
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
@@ -39,10 +39,10 @@ public class TestDeflateCompressor extends LCCoreAbstractTest {
 	public void test() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_compressor");
 		tmp.deleteOnExit();
-		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
+		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
 		DeflateCompressor compressor = new DeflateCompressor(false);
-		FileIO.ReadOnly fin = new FileIO.ReadOnly(testFile, Task.PRIORITY_NORMAL);
-		compressor.compress(fin, fout, 4096, 10, Task.PRIORITY_NORMAL).blockThrow(0);
+		FileIO.ReadOnly fin = new FileIO.ReadOnly(testFile, Task.Priority.NORMAL);
+		compressor.compress(fin, fout, 4096, 10, Task.Priority.NORMAL).blockThrow(0);
 		fin.close();
 		fout.close();
 		checkFile(tmp);
@@ -72,5 +72,5 @@ public class TestDeflateCompressor extends LCCoreAbstractTest {
 			throw new IOException("Data can be read after the end: " + nb);
 		gin.close();
 	}
-	
+
 }

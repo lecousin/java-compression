@@ -7,13 +7,15 @@ import java.util.function.Consumer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.TaskManager;
-import net.lecousin.framework.concurrent.Threading;
+import net.lecousin.framework.concurrent.CancelException;
+import net.lecousin.framework.concurrent.Executable;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
-import net.lecousin.framework.concurrent.async.CancelException;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.threads.TaskManager;
+import net.lecousin.framework.concurrent.threads.Threading;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
@@ -30,7 +32,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 	/** GZipReadable with a known uncompressed size. */
 	public static class SizeKnown extends GZipReadable implements IO.KnownSize {
 		/** Constructor. */
-		public SizeKnown(IO.Readable.Buffered input, byte priority, long uncompressedSize) {
+		public SizeKnown(IO.Readable.Buffered input, Priority priority, long uncompressedSize) {
 			super(input, priority);
 			this.uncompressedSize = uncompressedSize;
 		}
@@ -49,7 +51,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 	}
 	
 	/** Constructor. */
-	public GZipReadable(IO.Readable.Buffered input, byte priority) {
+	public GZipReadable(IO.Readable.Buffered input, Priority priority) {
 		this.input = input;
 		this.priority = priority;
 		header = new Async<>();
@@ -58,7 +60,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 	}
 	
 	private IO.Readable.Buffered input;
-	private byte priority;
+	private Priority priority;
 	private Inflater inflater;
 	private Async<IOException> header;
 	private ByteArray currentBuffer = null;
@@ -67,12 +69,12 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 	private AsyncSupplier<Integer,IOException> currentRead = null;
 	
 	@Override
-	public byte getPriority() {
+	public Priority getPriority() {
 		return priority;
 	}
 	
 	@Override
-	public void setPriority(byte priority) {
+	public void setPriority(Priority priority) {
 		this.priority = priority;
 	}
 	
@@ -131,32 +133,32 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 			nextBuffer().onDone(this::readHeader);
 			return;
 		}
-		new Task.Cpu.FromRunnable("Read GZip header", priority, this::readHeaderTask).start();
+		Task.cpu("Read GZip header", priority, this::readHeaderTask).start();
 	}
 	
-	private void readHeaderTask() {
+	private Void readHeaderTask() {
 		if (currentBuffer.remaining() < 10 && !readHeaderEnsure10Bytes())
-			return;
+			return null;
 		int b = currentBuffer.get() & 0xFF;
 		if (b != 0x1F) {
 			error = new IOException("Invalid GZIP header: first byte must be 1F, found is "
 				+ StringUtil.encodeHexa((byte)b));
 			header.error(error);
-			return;
+			return null;
 		}
 		b = currentBuffer.get() & 0xFF;
 		if (b != 0x8B) {
 			error = new IOException("Invalid GZIP header: second byte must be 8B, found is "
 				+ StringUtil.encodeHexa((byte)b));
 			header.error(error);
-			return;
+			return null;
 		}
 		b = currentBuffer.get() & 0xFF;
 		if (b != 8) {
 			error = new IOException("Unsupported compression method " + b
 				+ " for GZIP, only method 8 (deflate) is supported");
 			header.error(error);
-			return;
+			return null;
 		}
 		b = currentBuffer.get() & 0xFF;
 		// skip MTIME + XFL + OS
@@ -164,15 +166,15 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 		
 		// extra data
 		if ((b & 4) != 0 && !skipExtra())
-			return;
+			return null;
 		
 		// filename
 		if ((b & 8) != 0 && !skipString())
-			return;
+			return null;
 		
 		// comment
 		if ((b & 16) != 0 && !skipString())
-			return;
+			return null;
 		
 		// crc
 		if ((b & 2) != 0) {
@@ -192,11 +194,12 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 			} catch (IOException e) {
 				error = e;
 				header.error(e);
-				return;
+				return null;
 			}
 		}
 		
 		header.unblock();
+		return null;
 	}
 	
 	private boolean readHeaderEnsure10Bytes() {
@@ -323,7 +326,8 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 		}
 		if (!inflater.needsInput()) {
 			AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-			InflateTask inflate = new InflateTask(buffer, result, ondone, false);
+			Task<Void, NoException> inflate = Task.cpu("Uncompressing gzip: " + input.getSourceDescription(), priority,
+				new InflateTask(buffer, result, ondone, false));
 			currentRead = result;
 			operation(inflate.start());
 			if (inflate.isCancelling())
@@ -336,7 +340,8 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 			nextBuffer().onDone(() -> readAsync(buffer, ondone, true).forward(result));
 			return operation(result);
 		}
-		InflateTask inflate = new InflateTask(buffer, result, ondone, true);
+		Task<Void, NoException> inflate = Task.cpu("Uncompressing gzip: " + input.getSourceDescription(), priority,
+			new InflateTask(buffer, result, ondone, true));
 		currentRead = result;
 		operation(inflate.start());
 		if (inflate.isCancelling())
@@ -344,12 +349,11 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 		return result;
 	}
 	
-	private class InflateTask extends Task.Cpu<Void, NoException> {
+	private class InflateTask implements Executable<Void, NoException> {
 		private InflateTask(
 			ByteBuffer buffer, AsyncSupplier<Integer, IOException> result,
 			Consumer<Pair<Integer,IOException>> ondone, boolean setInput
 		) {
-			super("Uncompressing gzip: " + input.getSourceDescription(), priority);
 			this.buffer = buffer;
 			this.inflateResult = result;
 			this.onInflateDone = ondone;
@@ -362,7 +366,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 		private boolean setInput;
 
 		@Override
-		public Void run() {
+		public Void execute() {
 			if (isClosing() || isClosed() || input == null) {
 				inflateResult.cancel(new CancelException("GZip closed"));
 				return null;

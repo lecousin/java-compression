@@ -5,9 +5,9 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 
 import net.lecousin.framework.application.LCCore;
-import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.concurrent.util.AsyncConsumer;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIOError;
@@ -44,7 +44,7 @@ public class TestGZipConsumerErrors extends LCCoreAbstractTest {
 	}
 	
 	static void testFile(String filename, int bufferSize) throws Exception {
-		testError(LCCore.getApplication().getResource(filename, Task.PRIORITY_NORMAL), bufferSize);
+		testError(LCCore.getApplication().getResource(filename, Task.Priority.NORMAL), bufferSize);
 	}
 	
 	static void testError(IO.Readable io, int bufferSize) throws Exception {
@@ -64,7 +64,7 @@ public class TestGZipConsumerErrors extends LCCoreAbstractTest {
 					err.set(error);
 				}
 			};
-			io.createProducer(bufferSize, true, true).toConsumer(new GZipConsumer(bufferSize, consumer), "test", Task.PRIORITY_NORMAL).blockThrow(0);
+			io.createProducer(bufferSize, true, true).toConsumer(new GZipConsumer(bufferSize, consumer), "test", Task.Priority.NORMAL).blockThrow(0);
 			throw new AssertionError("error expected");
 		} catch (IOException e) {
 			// ok

@@ -9,10 +9,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import net.lecousin.framework.collections.ArrayUtil;
-import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.io.FileIO;
@@ -59,7 +59,7 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 	public void testCompressSyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_lzma2_writable");
 		tmp.deleteOnExit();
-		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
+		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
 		IO.Writable.Buffered bout = new SimpleBufferedWritable(fout, 4096);
 		LZMA2Options options = new LZMA2Options(preset);
 		LZMA2Writable out = new LZMA2Writable(bout, options);
@@ -75,7 +75,7 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 	public void testCompressAsyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_writable");
 		tmp.deleteOnExit();
-		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.PRIORITY_NORMAL);
+		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
 		IO.Writable.Buffered bout = new SimpleBufferedWritable(fout, 4096);
 		LZMA2Options options = new LZMA2Options(preset);
 		LZMA2Writable out = new LZMA2Writable(bout, options);

@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.zip.Deflater;
 
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.io.TestIOError;
 
@@ -15,7 +15,7 @@ public class TestGZipWritableErrors extends LCCoreAbstractTest {
 	@SuppressWarnings("resource")
 	@Test
 	public void testWriteErrorAlways() throws Exception {
-		GZipWritable gout = new GZipWritable(new TestIOError.WritableAlwaysError(), Task.PRIORITY_NORMAL, Deflater.BEST_COMPRESSION, 3);
+		GZipWritable gout = new GZipWritable(new TestIOError.WritableAlwaysError(), Task.Priority.NORMAL, Deflater.BEST_COMPRESSION, 3);
 		try {
 			gout.writeSync(ByteBuffer.allocate(16));
 			throw new AssertionError("error expected");
@@ -28,7 +28,11 @@ public class TestGZipWritableErrors extends LCCoreAbstractTest {
 		} catch (IOException e) {
 			// ok
 		}
-		gout.close();
+		try {
+			gout.close();
+		} catch (Exception e) {
+			// ok
+		}
 	}
 
 }

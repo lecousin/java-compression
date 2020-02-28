@@ -6,16 +6,19 @@ import java.util.function.Consumer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.TaskManager;
-import net.lecousin.framework.concurrent.Threading;
+import net.lecousin.framework.concurrent.CancelException;
+import net.lecousin.framework.concurrent.Executable;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
-import net.lecousin.framework.concurrent.async.CancelException;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.threads.TaskManager;
+import net.lecousin.framework.concurrent.threads.Threading;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
+import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
 
@@ -28,8 +31,8 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	/** DeflateReadable with a known uncompressed size. */
 	public static class SizeKnown extends DeflateReadable implements IO.KnownSize {
 		/** Constructor. */
-		public SizeKnown(IO.Readable input, byte priority, long uncompressedSize, boolean nowrap) {
-			super(input, priority, nowrap);
+		public SizeKnown(IO.Readable input, Priority priority, long uncompressedSize, boolean nowrap, int bufferSize) {
+			super(input, priority, nowrap, bufferSize);
 			this.uncompressedSize = uncompressedSize;
 		}
 
@@ -47,17 +50,17 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	}
 	
 	/** Constructor. */
-	public DeflateReadable(IO.Readable input, byte priority, boolean nowrap) {
+	public DeflateReadable(IO.Readable input, Priority priority, boolean nowrap, int bufferSize) {
 		inflater = new Inflater(nowrap);
 		this.input = input;
 		this.priority = priority;
+		readBuf = ByteBuffer.wrap(ByteArrayCache.getInstance().get(bufferSize, true));
 	}
 	
 	private IO.Readable input;
-	private byte priority;
+	private Priority priority;
 	private Inflater inflater;
-	private ByteBuffer readBuf = ByteBuffer.allocate(8192);
-	private AsyncSupplier<Integer, IOException> readTask = null;
+	private ByteBuffer readBuf;
 	private boolean reachEOF = false;
 
 	@Override
@@ -66,10 +69,10 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	}
 	
 	@Override
-	public byte getPriority() { return priority; }
+	public Priority getPriority() { return priority; }
 	
 	@Override
-	public void setPriority(byte priority) { this.priority = priority; }
+	public void setPriority(Priority priority) { this.priority = priority; }
 
 	@Override
 	public String getSourceDescription() { return "Deflate stream: " + (input != null ? input.getSourceDescription() : "closed"); }
@@ -85,8 +88,7 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	@Override
 	protected void closeResources(Async<IOException> ondone) {
 		input = null;
-		readBuf = null;
-		readTask = null;
+		ByteArrayCache.getInstance().free(readBuf);
 		inflater.end();
 		inflater = null;
 		ondone.unblock();
@@ -98,37 +100,21 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	}
 	
 	@Override
+	@SuppressWarnings("java:S1604")
 	public AsyncSupplier<Integer,IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer,IOException>> ondone) {
 		if (isClosing() || isClosed()) return new AsyncSupplier<>(null, null, new CancelException("Deflate stream closed"));
 		if (reachEOF)
 			return IOUtil.success(Integer.valueOf(-1), ondone);
-		if (readTask != null && !readTask.isDone()) {
-			Task<Integer,IOException> task = new Task.Cpu<Integer,IOException>(
-				"Waiting for previous uncompression task", priority, ondone
-			) {
-				@Override
-				public Integer run() throws IOException {
-					return Integer.valueOf(readBufferSync(buffer));
-				}
-			};
-			readTask.thenStart(task, false);
-			readTask = operation(task).getOutput();
-			return task.getOutput();
-		}
 		if (!inflater.needsInput()) {
 			AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-			Task<Void, NoException> inflate = new Task.Cpu<Void, NoException>(
-				"Uncompressing zip: " + input.getSourceDescription(), priority
-			) {
+			Task.cpu("Uncompressing zip: " + input.getSourceDescription(), priority, new Executable<Void, NoException>() {
 				@Override
-				public Void run() {
+				public Void execute() {
 					readBufferAsync(buffer, ondone, result);
 					return null;
 				}
-			};
-			inflate.start();
-			readTask = operation(result);
-			return result;
+			}).start();
+			return operation(result);
 		}
 		if (inflater.finished()) {
 			reachEOF = true;
@@ -136,16 +122,11 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 		}
 		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
 		fillAsync(buffer, result, ondone);
-		readTask = operation(result);
-		return readTask;
+		return operation(result);
 	}
 	
 	@Override
 	public int readSync(ByteBuffer buffer) throws IOException {
-		if (readTask != null)
-			try { readTask.blockThrow(0); }
-			catch (CancelException cancel) { return -1; }
-			catch (Exception err) { throw IO.error(err); }
 		return readBufferSync(buffer);
 	}
 	
@@ -229,14 +210,13 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 		inflater.setInput(readBuf.array(), 0, len);
 	}
 	
+	@SuppressWarnings("java:S1604")
 	private void fillAsync(ByteBuffer buffer, AsyncSupplier<Integer, IOException> result, Consumer<Pair<Integer,IOException>> ondone) {
 		readBuf.clear();
 		AsyncSupplier<Integer, IOException> read = input.readAsync(readBuf);
-		Task<Void, NoException> inflate = new Task.Cpu<Void, NoException>(
-			"Uncompressing zip: " + input.getSourceDescription(), priority
-		) {
+		Task.cpu("Uncompressing zip: " + input.getSourceDescription(), priority, new Executable<Void, NoException>() {
 			@Override
-			public Void run() {
+			public Void execute() {
 				if (!read.isSuccessful()) {
 					IOUtil.notSuccess(read, result, ondone);
 					return null;
@@ -251,17 +231,12 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 				readBufferAsync(buffer, ondone, result);
 				return null;
 			}
-		};
-		inflate.startOn(read, true);
+		}).startOn(read, true);
 	}
 
 	@Override
 	public int readFullySync(ByteBuffer buffer) throws IOException {
 		if (reachEOF) return -1;
-		if (readTask != null)
-			try { readTask.blockThrow(0); }
-			catch (CancelException e) { return -1; }
-			catch (Exception e) { throw IO.error(e); }
 		return IOUtil.readFully(this, buffer);
 	}
 

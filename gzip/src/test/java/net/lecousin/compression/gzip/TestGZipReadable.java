@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import net.lecousin.framework.application.LCCore;
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.core.test.LCCoreAbstractTest;
 import net.lecousin.framework.core.test.runners.LCConcurrentRunner;
 import net.lecousin.framework.io.IO;
@@ -53,9 +53,9 @@ public class TestGZipReadable extends LCCoreAbstractTest {
 	}
 	
 	static void testFile(String filename, int bufferSize) throws Exception {
-		IO.Readable source = LCCore.getApplication().getResource(filename, Task.PRIORITY_NORMAL);
+		IO.Readable source = LCCore.getApplication().getResource(filename, Task.Priority.NORMAL);
 		IO.Readable.Buffered bin = new SimpleBufferedReadable(source, bufferSize);
-		try (GZipReadable gzip = new GZipReadable(bin, Task.PRIORITY_NORMAL)) {
+		try (GZipReadable gzip = new GZipReadable(bin, Task.Priority.NORMAL)) {
 			byte[] buf = new byte[4096];
 			while (gzip.readFullySync(ByteBuffer.wrap(buf)) == 4096);
 		}
