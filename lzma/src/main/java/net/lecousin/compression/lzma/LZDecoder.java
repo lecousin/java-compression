@@ -3,6 +3,7 @@ package net.lecousin.compression.lzma;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.io.IO;
@@ -18,9 +19,11 @@ final class LZDecoder {
     private int pendingLen = 0;
     private int pendingDist = 0;
 
-    public LZDecoder(int dictSize, byte[] presetDict) {
+    public LZDecoder(int dictSize, byte[] presetDict, ByteArrayCache arrayCache, boolean fillBufferWithZeros) {
         bufSize = dictSize;
-        buf = new byte[bufSize];//arrayCache.get(bufSize, true);
+        buf = arrayCache.get(bufSize, true);
+        if (fillBufferWithZeros)
+        	Arrays.fill(buf, (byte)0);
 
         if (presetDict != null) {
             pos = Math.min(presetDict.length, dictSize);

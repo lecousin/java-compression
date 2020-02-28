@@ -63,7 +63,7 @@ public class TestLZMA2Readable extends TestReadable {
 		} else {
 			options = new org.tukaani.xz.LZMA2Options(preset);
 		}
-		FinishableOutputStream out = options.getOutputStream(new FinishableWrapperOutputStream(fout));
+		FinishableOutputStream out = options.getOutputStream(new FinishableWrapperOutputStream(fout), new LCArrayCache());
 		byte[] buffer = new byte[65536];
 		while (true) {
 			int nb = file.readFullySync(ByteBuffer.wrap(buffer));

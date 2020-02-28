@@ -171,7 +171,7 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
         else
         	this.input = new PreBufferedReadable(input, COMPRESSED_SIZE_MAX, input.getPriority(), COMPRESSED_SIZE_MAX, input.getPriority(), 8);
         this.rc = new RangeDecoderFromBuffer(COMPRESSED_SIZE_MAX, arrayCache);
-        this.lz = new LZDecoder(getDictSize(dictSize), presetDict);
+        this.lz = new LZDecoder(getDictSize(dictSize), presetDict, arrayCache, false);
 
         if (presetDict != null && presetDict.length > 0)
             needDictReset = false;

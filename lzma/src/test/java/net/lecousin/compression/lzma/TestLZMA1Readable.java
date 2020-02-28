@@ -16,6 +16,7 @@ import net.lecousin.framework.io.buffering.SimpleBufferedReadable;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
+import org.tukaani.xz.ArrayCache;
 import org.tukaani.xz.LZMAOutputStream;
 
 @RunWith(Parameterized.class)
@@ -46,11 +47,18 @@ public class TestLZMA1Readable extends TestReadable {
 	
 	@Override
 	protected IO.Readable createReadableFromFile(FileIO.ReadOnly file, long fileSize) throws Exception {
+		ArrayCache.setDefaultCache(new ArrayCache() {
+			@Override
+			public byte[] getByteArray(int size, boolean fillWithZeros) {
+				// TODO Auto-generated method stub
+				return super.getByteArray(size, fillWithZeros);
+			}
+		});
 		File tmp = File.createTempFile("test", "_" + fileSize + "_lzma1");
 		tmp.deleteOnExit();
 		FileOutputStream fout = new FileOutputStream(tmp);
 		org.tukaani.xz.LZMA2Options options = new org.tukaani.xz.LZMA2Options(preset);
-		LZMAOutputStream out = new LZMAOutputStream(fout, options, file.getSizeSync());
+		LZMAOutputStream out = new LZMAOutputStream(fout, options, file.getSizeSync(), new LCArrayCache());
 		byte[] buffer = new byte[65536];
 		while (true) {
 			int nb = file.readFullySync(ByteBuffer.wrap(buffer));

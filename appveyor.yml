@@ -11,8 +11,8 @@ install:
         [System.IO.Compression.ZipFile]::ExtractToDirectory("C:\maven-bin.zip", "C:\maven")
       }
   - cmd: SET PATH=C:\maven\apache-maven-3.3.9\bin;%JAVA_HOME%\bin;%PATH%
-  - cmd: SET MAVEN_OPTS=-Xmx1024m
-  - cmd: SET JAVA_OPTS=-XX:+UseG1GC -Xmx1024m
+  - cmd: SET MAVEN_OPTS=-Xmx2048m
+  - cmd: SET JAVA_OPTS=-XX:+UseG1GC -Xmx2048m
 build_script:
   - mvn clean package --batch-mode -DskipTest
 test_script:

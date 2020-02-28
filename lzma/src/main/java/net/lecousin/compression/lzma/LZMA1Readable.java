@@ -567,7 +567,7 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
         if (uncompSize >= 0 && dictSize > uncompSize)
             dictSize = getDictSize((int)uncompSize);
 
-        lz = new LZDecoder(getDictSize(dictSize), presetDict);
+        lz = new LZDecoder(getDictSize(dictSize), presetDict, arrayCache, true);
         rc = new RangeDecoderFromStream(input);
         lzma = new LZMADecoder(lz, rc, lc, lp, pb);
 

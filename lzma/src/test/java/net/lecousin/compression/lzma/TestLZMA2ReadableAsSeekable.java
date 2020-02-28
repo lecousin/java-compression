@@ -37,7 +37,7 @@ public class TestLZMA2ReadableAsSeekable extends TestReadableSeekable {
 		tmp.deleteOnExit();
 		FileOutputStream fout = new FileOutputStream(tmp);
 		org.tukaani.xz.LZMA2Options options = new org.tukaani.xz.LZMA2Options(org.tukaani.xz.LZMA2Options.PRESET_DEFAULT);
-		FinishableOutputStream out = options.getOutputStream(new FinishableWrapperOutputStream(fout));
+		FinishableOutputStream out = options.getOutputStream(new FinishableWrapperOutputStream(fout), new LCArrayCache());
 		byte[] buffer = new byte[65536];
 		while (true) {
 			int nb = file.readFullySync(ByteBuffer.wrap(buffer));

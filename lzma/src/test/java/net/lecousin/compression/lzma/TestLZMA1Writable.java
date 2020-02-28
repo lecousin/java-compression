@@ -19,6 +19,8 @@ import net.lecousin.framework.core.test.io.TestIO;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.SimpleBufferedWritable;
+import net.lecousin.framework.memory.IMemoryManageable.FreeMemoryLevel;
+import net.lecousin.framework.memory.MemoryManager;
 import net.lecousin.framework.mutable.Mutable;
 import net.lecousin.framework.mutable.MutableInteger;
 
@@ -26,6 +28,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
+import org.tukaani.xz.ArrayCache;
 import org.tukaani.xz.LZMAInputStream;
 
 @RunWith(Parameterized.class)
@@ -160,7 +163,8 @@ public class TestLZMA1Writable extends LCCoreAbstractTest {
 	}
 	
 	private void checkFile(File f) throws IOException {
-		try (FileInputStream fin = new FileInputStream(f); InputStream in = new LZMAInputStream(fin)) {
+		MemoryManager.freeMemory(FreeMemoryLevel.URGENT);
+		try (FileInputStream fin = new FileInputStream(f); InputStream in = new LZMAInputStream(fin, new ArrayCache())) {
 			byte[] b = new byte[testBuf.length];
 			for (int i = 0; i < nbBuf; ++i) {
 				int done = 0;

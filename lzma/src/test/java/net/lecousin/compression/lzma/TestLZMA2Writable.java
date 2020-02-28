@@ -161,7 +161,7 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 	private void checkFile(File f) throws IOException {
 		FileInputStream fin = new FileInputStream(f);
 		org.tukaani.xz.LZMA2Options options = new org.tukaani.xz.LZMA2Options(preset);
-		InputStream in = options.getInputStream(fin);
+		InputStream in = options.getInputStream(fin, new LCArrayCache());
 		byte[] b = new byte[testBuf.length];
 		for (int i = 0; i < nbBuf; ++i) {
 			int done = 0;
