@@ -16,6 +16,12 @@ public class TestBasics extends LCCoreAbstractTest {
 		} catch (IllegalArgumentException e) {
 			// ok
 		}
+		LZMA2Writable.getMemoryUsage(new LZMA2Options());
+		LZMA2Readable.getMemoryUsage(4096);
+		try {
+			LZMA1Readable.getMemoryUsage(4096, (byte)0);
+		} catch (Exception e) {
+		}
 	}
 	
 }

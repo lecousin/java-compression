@@ -18,9 +18,9 @@ final class LZDecoder {
     private int pendingLen = 0;
     private int pendingDist = 0;
 
-    public LZDecoder(int dictSize, byte[] presetDict, ByteArrayCache arrayCache) {
+    public LZDecoder(int dictSize, byte[] presetDict) {
         bufSize = dictSize;
-        buf = arrayCache.get(bufSize, true);
+        buf = new byte[bufSize];//arrayCache.get(bufSize, true);
 
         if (presetDict != null) {
             pos = Math.min(presetDict.length, dictSize);
@@ -78,7 +78,7 @@ final class LZDecoder {
 
     public void repeat(int dist, int len) throws IOException {
         if (dist < 0 || dist >= full)
-            throw new CorruptedInputException();
+            throw new CorruptedInputException("distance = " + dist + ", full = " + full);
 
         int left = Math.min(limit - pos, len);
         pendingLen = len - left;

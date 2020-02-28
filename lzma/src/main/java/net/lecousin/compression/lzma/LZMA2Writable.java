@@ -59,9 +59,6 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
     }
     
     public LZMA2Writable(IO.Writable.Buffered output, LZMA2Options options, ByteArrayCache byteArrayCache, IntArrayCache intArrayCache) {
-        if (output == null)
-            throw new IllegalArgumentException("output cannot be null");
-
         this.byteArrayCache = byteArrayCache;
         this.intArrayCache = intArrayCache;
         this.output = output;
@@ -203,11 +200,9 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
         lzma.resetUncompressedSize();
         rc.reset();
     }
-
-    private void writeLZMASync(int uncompressedSize, int compressedSize)
-    throws IOException {
-        int control;
-
+    
+    private byte getControl(int uncompressedSize) {
+    	int control;
         if (propsNeeded) {
             if (dictResetNeeded)
                 control = 0x80 + (3 << 5);
@@ -221,13 +216,18 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
         }
 
         control |= (uncompressedSize - 1) >>> 16;
-        output.write((byte)control);
+        return (byte)control;
+    }
 
-        DataUtil.Write16.BE.write(output, (short)(uncompressedSize - 1));
-        DataUtil.Write16.BE.write(output, (short)(compressedSize - 1));
-
+    private void writeLZMASync(int uncompressedSize, int compressedSize)
+    throws IOException {
+    	byte[] b = new byte[propsNeeded ? 6 : 5];
+    	b[0] = getControl(uncompressedSize);
+        DataUtil.Write16.BE.write(b, 1, (short)(uncompressedSize - 1));
+        DataUtil.Write16.BE.write(b, 3, (short)(compressedSize - 1));
         if (propsNeeded)
-        	output.write((byte)props);
+        	b[5] = (byte)props;
+        output.write(b);
 
         rc.writeSync(output);
 
@@ -237,38 +237,23 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
     }
 
     private IAsync<IOException> writeLZMAAsync(int uncompressedSize, int compressedSize) {
-        int control;
-
-        if (propsNeeded) {
-            if (dictResetNeeded)
-                control = 0x80 + (3 << 5);
-            else
-                control = 0x80 + (2 << 5);
-        } else {
-            if (stateResetNeeded)
-                control = 0x80 + (1 << 5);
-            else
-                control = 0x80;
-        }
-
-        control |= (uncompressedSize - 1) >>> 16;
-        try { // TODO async ?
-	        output.write((byte)control);
-	
-	        DataUtil.Write16.BE.write(output, (short)(uncompressedSize - 1));
-	        DataUtil.Write16.BE.write(output, (short)(compressedSize - 1));
-	
-	        if (propsNeeded)
-	        	output.write((byte)props);
-        } catch (IOException e) {
-        	return new Async<>(e);
-        }
+    	byte[] b = new byte[propsNeeded ? 6 : 5];
+    	b[0] = getControl(uncompressedSize);
+        DataUtil.Write16.BE.write(b, 1, (short)(uncompressedSize - 1));
+        DataUtil.Write16.BE.write(b, 3, (short)(compressedSize - 1));
+        if (propsNeeded)
+        	b[5] = (byte)props;
 
         propsNeeded = false;
         stateResetNeeded = false;
         dictResetNeeded = false;
-
-        return rc.writeAsync(output);
+        
+        AsyncSupplier<Integer, IOException> write = output.writeAsync(ByteBuffer.wrap(b));
+        if (write.isSuccessful())
+        	return rc.writeAsync(output);
+        Async<IOException> result = new Async<>();
+        write.onDone(() -> rc.writeAsync(output).onDone(result), result);
+        return result;
     }
 
     private void writeUncompressedSync(int uncompressedSize) throws IOException {

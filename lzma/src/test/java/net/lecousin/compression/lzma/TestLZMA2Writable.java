@@ -60,23 +60,38 @@ public class TestLZMA2Writable extends LCCoreAbstractTest {
 	public void testCompressSyncUncompress() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_lzma2_writable");
 		tmp.deleteOnExit();
-		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
-		IO.Writable.Buffered bout = new SimpleBufferedWritable(fout, 4096);
 		LZMA2Options options = new LZMA2Options(preset);
-		LZMA2Writable out = new LZMA2Writable(bout, options);
-		for (int i = 0; i < nbBuf; ++i)
-			out.writeSync(ByteBuffer.wrap(testBuf));
-		out.finishSync();
-		bout.flush();
-		
-		out.getSourceDescription();
-		out.getWrappedIO();
-		out.getPriority();
-		out.setPriority(Priority.NORMAL);
-		out.getTaskManager();
-		out.canStartWriting();
-		
-		out.close();
+		try (
+			FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
+			IO.Writable.Buffered bout = new SimpleBufferedWritable(fout, 4096);
+			LZMA2Writable out = new LZMA2Writable(bout, options)
+		) {
+			for (int i = 0; i < nbBuf; ++i)
+				out.writeSync(ByteBuffer.wrap(testBuf));
+			out.finishSync();
+			bout.flush();
+			
+			out.getSourceDescription();
+			out.getWrappedIO();
+			out.getPriority();
+			out.setPriority(Priority.NORMAL);
+			out.getTaskManager();
+			out.canStartWriting();
+			
+			try {
+				out.writeSync(ByteBuffer.allocate(1));
+				throw new AssertionError();
+			} catch (IOException e) {
+				// ok
+			}
+			
+			try {
+				out.writeAsync(ByteBuffer.allocate(1)).blockThrow(0);
+				throw new AssertionError();
+			} catch (IOException e) {
+				// ok
+			}
+		}		
 		checkFile(tmp);
 	}
 	
