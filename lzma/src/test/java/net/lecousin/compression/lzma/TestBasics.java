@@ -8,9 +8,14 @@ public class TestBasics extends LCCoreAbstractTest {
 
 	@Test
 	public void test() {
-		LZMAEncoderNormal.getMemoryUsage(1024, 1024, 1);
-		LZMAEncoder.getMemoryUsage(LZMA2Options.Mode.FAST, 1024, 1204, 1);
-		LZMAEncoder.getMemoryUsage(LZMA2Options.Mode.NORMAL, 1024, 1204, 1);
+		LZMAEncoderNormal.getMemoryUsage(1024, 1024, LZEncoder.MF_BT4);
+		LZMAEncoder.getMemoryUsage(LZMA2Options.Mode.FAST, 1024, 1204, LZEncoder.MF_BT4);
+		LZMAEncoder.getMemoryUsage(LZMA2Options.Mode.NORMAL, 1024, 1204, LZEncoder.MF_HC4);
+		try {
+			LZMAEncoderNormal.getMemoryUsage(1024, 1024, 0);
+		} catch (IllegalArgumentException e) {
+			// ok
+		}
 	}
 	
 }
