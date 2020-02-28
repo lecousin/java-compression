@@ -59,6 +59,5 @@ final class TaskUtil {
 		waiting.thenStart(compressionTask(output, () -> continueProvider.get().onDone(sp)), sp);
     	return sp;
 	}
-	
 
 }

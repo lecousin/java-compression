@@ -55,6 +55,7 @@ abstract class LZMAEncoder extends LZMACoder {
     int readAhead = -1;
     private int uncompressedSize = 0;
 
+    @SuppressWarnings("java:S1301")
     public static int getMemoryUsage(Mode mode, int dictSize,
                                      int extraSizeBefore, int mf) {
         int m = 80;
@@ -74,7 +75,7 @@ abstract class LZMAEncoder extends LZMACoder {
         return m;
     }
 
-    @SuppressWarnings("squid:S00107")
+    @SuppressWarnings({"java:S107", "java:S1301"})
     public static LZMAEncoder getInstance(
                 RangeEncoder rc, int lc, int lp, int pb, Mode mode,
                 int dictSize, int extraSizeBefore,
@@ -645,7 +646,7 @@ abstract class LZMAEncoder extends LZMACoder {
          * <code>PRICE_UPDATE_INTERVAL</code> many lengths
          * have been encoded with the same posState.
          */
-        private static final int PRICE_UPDATE_INTERVAL = 32; // FIXME?
+        private static final int PRICE_UPDATE_INTERVAL = 32;
 
         private final int[] counters;
         private final int[][] prices;

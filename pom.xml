@@ -14,6 +14,10 @@
   <properties>
   	<sonar.sourceEncoding>UTF-8</sonar.sourceEncoding>
   	<sonar.test.exclusions>**/src/test/**/*</sonar.test.exclusions>
+    <sonar.cpd.exclusions>
+      **/lzma/HC4.*,
+      **/lzma/BT4.*
+    </sonar.cpd.exclusions>
   </properties>
   
   <modules>

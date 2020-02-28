@@ -310,18 +310,13 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
     }
 
 	@Override
-	public String getSourceDescription() {
-		return output != null ? "LZMA2Writable[" + output.getSourceDescription() + "]" : "LZMA2Writable";
-	}
-
-	@Override
 	public IO getWrappedIO() {
 		return output;
 	}
 
 	@Override
-	public void setPriority(Priority priority) {
-		if (output != null) output.setPriority(priority);
+	public String getSourceDescription() {
+		return output != null ? "LZMA2Writable[" + output.getSourceDescription() + "]" : "LZMA2Writable";
 	}
 
 	@Override
@@ -330,13 +325,18 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
 	}
 
 	@Override
-	public TaskManager getTaskManager() {
-		return Threading.getCPUTaskManager();
+	public void setPriority(Priority priority) {
+		if (output != null) output.setPriority(priority);
 	}
 
 	@Override
 	public IAsync<IOException> canStartWriting() {
 		return output.canStartWriting();
+	}
+
+	@Override
+	public TaskManager getTaskManager() {
+		return Threading.getCPUTaskManager();
 	}
 
 }

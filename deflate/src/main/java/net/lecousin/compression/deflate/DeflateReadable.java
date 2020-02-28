@@ -18,6 +18,7 @@ import net.lecousin.framework.concurrent.threads.Threading;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
+import net.lecousin.framework.io.data.ByteArray;
 import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
@@ -62,6 +63,8 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	private Inflater inflater;
 	private ByteBuffer readBuf;
 	private boolean reachEOF = false;
+	
+	private static final String ERROR_CLOSED = "Deflate stream closed";
 
 	@Override
 	public TaskManager getTaskManager() {
@@ -102,7 +105,7 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	@Override
 	@SuppressWarnings("java:S1604")
 	public AsyncSupplier<Integer,IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer,IOException>> ondone) {
-		if (isClosing() || isClosed()) return new AsyncSupplier<>(null, null, new CancelException("Deflate stream closed"));
+		if (isClosing() || isClosed()) return new AsyncSupplier<>(null, null, new CancelException(ERROR_CLOSED));
 		if (reachEOF)
 			return IOUtil.success(Integer.valueOf(-1), ondone);
 		if (!inflater.needsInput()) {
@@ -127,24 +130,16 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	
 	@Override
 	public int readSync(ByteBuffer buffer) throws IOException {
-		if (isClosing() || isClosed()) throw new IOException("Deflate stream closed");
+		if (isClosing() || isClosed()) throw new IOException(ERROR_CLOSED);
 		return readBufferSync(buffer);
 	}
 	
 	private int readBufferSync(ByteBuffer buffer) throws IOException {
 		if (reachEOF) return -1;
-		byte[] b;
-		int off;
-		if (buffer.hasArray()) {
-			b = buffer.array();
-			off = buffer.arrayOffset() + buffer.position();
-		} else {
-			b = new byte[buffer.remaining()];
-			off = 0;
-		}
+		ByteArray b = ByteArray.fromByteBuffer(buffer);
 		try {
 			int n;
-			while ((n = inflater.inflate(b, off, buffer.remaining())) == 0) {
+			while ((n = inflater.inflate(b.getArray(), b.getCurrentArrayOffset(), buffer.remaining())) == 0) {
 				if (inflater.finished() || inflater.needsDictionary()) {
 					reachEOF = true;
 					return -1;
@@ -152,9 +147,9 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 				if (inflater.needsInput()) fillSync();
 			}
 			if (!buffer.hasArray())
-				buffer.put(b, 0, n);
+				buffer.put(b.getArray(), 0, n);
 			else
-				buffer.position(off + n - buffer.arrayOffset());
+				buffer.position(buffer.position() + n);
 			return n;
 		} catch (DataFormatException e) {
 			throw new IOException("Inflate error after " + inflater.getBytesRead()
@@ -165,20 +160,12 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	private void readBufferAsync(
 		ByteBuffer buffer, Consumer<Pair<Integer,IOException>> ondone, AsyncSupplier<Integer, IOException> result
 	) {
-		byte[] b;
-		int off;
-		if (buffer.hasArray()) {
-			b = buffer.array();
-			off = buffer.arrayOffset() + buffer.position();
-		} else {
-			b = new byte[buffer.remaining()];
-			off = 0;
-		}
+		ByteArray b = ByteArray.fromByteBuffer(buffer);
 		try {
 			int n;
 			int total = 0;
 			do {
-				while ((n = inflater.inflate(b, off + total, buffer.remaining() - total)) == 0) {
+				while ((n = inflater.inflate(b.getArray(), b.getCurrentArrayOffset() + total, buffer.remaining() - total)) == 0) {
 					if (total > 0) break;
 					if (inflater.finished() || inflater.needsDictionary()) {
 						reachEOF = true;
@@ -186,7 +173,7 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 						return;
 					}
 					if (isClosing() || isClosed()) {
-						IOUtil.error(new IOException("Deflate stream closed"), result, ondone);
+						IOUtil.error(new IOException(ERROR_CLOSED), result, ondone);
 						return;
 					}
 					if (inflater.needsInput()) {
@@ -197,9 +184,9 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 				total += n;
 			} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
 			if (!buffer.hasArray())
-				buffer.put(b, 0, total);
+				buffer.put(b.getArray(), 0, total);
 			else
-				buffer.position(off + total - buffer.arrayOffset());
+				buffer.position(buffer.position() + total);
 			IOUtil.success(Integer.valueOf(total), result, ondone);
 		} catch (DataFormatException e) {
 			IOUtil.error(new IOException("Inflate error after " + inflater.getBytesRead() + " compressed bytes read, and "
@@ -208,7 +195,7 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	}
 	
 	private void fillSync() throws IOException {
-		if (isClosing() || isClosed()) throw new IOException("Deflate stream closed");
+		if (isClosing() || isClosed()) throw new IOException(ERROR_CLOSED);
 		readBuf.clear();
 		int len = input.readSync(readBuf);
 		if (len <= 0)
@@ -229,7 +216,7 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 				}
 				int len = read.getResult().intValue();
 				if (len <= 0) {
-					if (isClosing() || isClosed()) result.cancel(new CancelException("Deflate stream closed"));
+					if (isClosing() || isClosed()) result.cancel(new CancelException(ERROR_CLOSED));
 					else IOUtil.error(new IOException("Unexpected end of zip input"), result, ondone);
 					return null;
 				}

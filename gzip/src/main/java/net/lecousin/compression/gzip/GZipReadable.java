@@ -375,15 +375,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 				inflater.setInput(currentBuffer.getArray(), currentBuffer.getCurrentArrayOffset(), currentBuffer.remaining());
 				currentBuffer.goToEnd();
 			}
-			byte[] b;
-			int off;
-			if (buffer.hasArray()) {
-				b = buffer.array();
-				off = buffer.arrayOffset() + buffer.position();
-			} else {
-				b = new byte[buffer.remaining()];
-				off = 0;
-			}
+			ByteArray b = ByteArray.fromByteBuffer(buffer);
 			try {
 				int n;
 				int total = 0;
@@ -392,7 +384,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 						inflateResult.cancel(new CancelException("GZip closed"));
 						return null;
 					}
-					n = inflater.inflate(b, off + total, buffer.remaining() - total);
+					n = inflater.inflate(b.getArray(), b.getCurrentArrayOffset() + total, buffer.remaining() - total);
 					if (n > 0)
 						total += n;
 	                if (inflater.finished() || inflater.needsDictionary()) {
@@ -416,9 +408,9 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 	                }
 				} while (n > 0 && total < buffer.remaining() && !inflater.needsInput());
 				if (!buffer.hasArray())
-					buffer.put(b, 0, total);
+					buffer.put(b.getArray(), 0, total);
 				else
-					buffer.position(off + total - buffer.arrayOffset());
+					buffer.position(buffer.position() + total);
 				IOUtil.success(Integer.valueOf(total), inflateResult, onInflateDone);
 			} catch (DataFormatException e) {
 				error = new IOException("Invalid compressed data after " + inflater.getBytesRead()

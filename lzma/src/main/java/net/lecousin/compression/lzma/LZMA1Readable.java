@@ -69,8 +69,7 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
     public static int getMemoryUsage(int dictSize, byte propsByte)
             throws UnsupportedOptionsException, CorruptedInputException {
         if (dictSize < 0 || dictSize > DICT_SIZE_MAX)
-            throw new UnsupportedOptionsException(
-                    "LZMA dictionary is too big for this implementation");
+            throw new UnsupportedOptionsException(UnsupportedOptionsException.LZMA_DICT_TOO_BIG);
 
         int props = propsByte & 0xFF;
         if (props > (4 * 5 + 4) * 9 + 8)
@@ -116,8 +115,7 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
 
     private static int getDictSize(int dictSize) {
         if (dictSize < 0 || dictSize > DICT_SIZE_MAX)
-            throw new IllegalArgumentException(
-                    "LZMA dictionary is too big for this implementation");
+            throw new IllegalArgumentException(UnsupportedOptionsException.LZMA_DICT_TOO_BIG);
 
         // For performance reasons, use a 4 KiB dictionary if something
         // smaller was requested. It's a rare situation and the performance
@@ -510,6 +508,7 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
      *
      * @throws      IOException may be thrown by <code>in</code>
      */
+    @SuppressWarnings("java:S107") // number of parameters
     public LZMA1Readable(
     	IO.Readable in, long uncompSize, int lc, int lp, int pb,
         int dictSize, byte[] presetDict, ByteArrayCache arrayCache
@@ -523,8 +522,7 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
         // Validate the uncompressed size since the other "initialize" throws
         // IllegalArgumentException if uncompSize < -1.
         if (uncompSize < -1)
-            throw new UnsupportedOptionsException(
-                    "Uncompressed size is too big");
+            throw new UnsupportedOptionsException("Uncompressed size is too big");
 
         // Decode the properties byte. In contrast to LZMA2, there is no
         // limit of lc + lp <= 4.
@@ -540,12 +538,12 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
         // Validate the dictionary size since the other "initialize" throws
         // IllegalArgumentException if dictSize is not supported.
         if (dictSize < 0 || dictSize > DICT_SIZE_MAX)
-            throw new UnsupportedOptionsException(
-                    "LZMA dictionary is too big for this implementation");
+            throw new UnsupportedOptionsException(UnsupportedOptionsException.LZMA_DICT_TOO_BIG);
 
         initialize(in, uncompSize, lc, lp, pb, dictSize, presetDict, arrayCache);
     }
 
+    @SuppressWarnings("java:S107") // number of parameters
     private void initialize(
     	IO.Readable in, long uncompSize, int lc, int lp, int pb, int dictSize, byte[] presetDict, ByteArrayCache arrayCache
     ) throws IOException {
@@ -660,16 +658,12 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
     
     @Override
     public AsyncSupplier<Integer, IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
-    	return Task.cpu("Read LZMA1", input.getPriority(), () -> {
-    		return Integer.valueOf(readSync(buffer, false));
-    	}, ondone).start().getOutput();
+    	return Task.cpu("Read LZMA1", input.getPriority(), () -> Integer.valueOf(readSync(buffer, false)), ondone).start().getOutput();
     }
     
     @Override
     public AsyncSupplier<Integer, IOException> readFullyAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
-    	return Task.cpu("Read LZMA1", input.getPriority(), () -> {
-    		return Integer.valueOf(readSync(buffer, true));
-    	}, ondone).start().getOutput();
+    	return Task.cpu("Read LZMA1", input.getPriority(), () -> Integer.valueOf(readSync(buffer, true)), ondone).start().getOutput();
     }
 
     private void putArraysToCache() {
@@ -687,14 +681,8 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
     @Override
     protected void closeResources(Async<IOException> ondone) {
     	input = null;
-    	// TODO
     	ondone.unblock();
     }
-
-	@Override
-	public String getSourceDescription() {
-		return input != null ? "LZMA1Readable[" + input.getSourceDescription() + "]" : "LZMA1Readable";
-	}
 
 	@Override
 	public IO getWrappedIO() {
@@ -702,13 +690,8 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
 	}
 
 	@Override
-	public void setPriority(Priority priority) {
-		if (input != null) input.setPriority(priority);
-	}
-
-	@Override
-	public Priority getPriority() {
-		return input != null ? input.getPriority() : Task.Priority.NORMAL;
+	public String getSourceDescription() {
+		return input != null ? "LZMA1Readable[" + input.getSourceDescription() + "]" : "LZMA1Readable";
 	}
 
 	@Override
@@ -717,18 +700,28 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
 	}
 
 	@Override
+	public Priority getPriority() {
+		return input != null ? input.getPriority() : Task.Priority.NORMAL;
+	}
+
+	@Override
+	public void setPriority(Priority priority) {
+		if (input != null) input.setPriority(priority);
+	}
+
+	@Override
 	public IAsync<IOException> canStartReading() {
 		return input.canStartReading();
 	}
 
 	@Override
-	public long skipSync(long n) throws IOException {
-		return IOUtil.skipSyncByReading(this, n);
+	public AsyncSupplier<Long, IOException> skipAsync(long n, Consumer<Pair<Long, IOException>> ondone) {
+		return IOUtil.skipAsyncByReading(this, n, ondone);
 	}
 
 	@Override
-	public AsyncSupplier<Long, IOException> skipAsync(long n, Consumer<Pair<Long, IOException>> ondone) {
-		return IOUtil.skipAsyncByReading(this, n, ondone);
+	public long skipSync(long n) throws IOException {
+		return IOUtil.skipSyncByReading(this, n);
 	}
 
 }

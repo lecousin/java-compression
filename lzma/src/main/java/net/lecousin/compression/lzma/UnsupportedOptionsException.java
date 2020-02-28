@@ -24,4 +24,6 @@ public class UnsupportedOptionsException extends IOException {
     public UnsupportedOptionsException(String s) {
         super(s);
     }
+    
+    public static final String LZMA_DICT_TOO_BIG = "LZMA dictionary is too big for this implementation";
 }

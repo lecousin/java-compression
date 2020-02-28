@@ -272,7 +272,7 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
     private IAsync<IOException> writeUncompressedAsync(int uncompressedSize) {
         while (uncompressedSize > 0) {
             int chunkSize = Math.min(uncompressedSize, COMPRESSED_SIZE_MAX);
-            try { // TODO async ?
+            try {
 	            output.write((byte)(dictResetNeeded ? 0x01 : 0x02));
 	            DataUtil.Write16.BE.write(output, (short)(chunkSize - 1));
             } catch (IOException e) {
@@ -372,7 +372,6 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
     @Override
     protected void closeResources(Async<IOException> ondone) {
     	output = null;
-    	// TODO
     	ondone.unblock();
     }
 

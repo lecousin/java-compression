@@ -159,11 +159,6 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
      *
      */
     public LZMA2Readable(IO.Readable input, int dictSize, byte[] presetDict, ByteArrayCache arrayCache) {
-        // Check for null because otherwise null isn't detect
-        // in this constructor.
-        if (input == null)
-            throw new IllegalArgumentException("input is null");
-
         if (arrayCache == null) arrayCache = ByteArrayCache.getInstance();
         this.arrayCache = arrayCache;
         if (input instanceof IO.Readable.Buffered)
@@ -497,7 +492,6 @@ public class LZMA2Readable extends ConcurrentCloseable<IOException> implements I
     @Override
     protected void closeResources(Async<IOException> ondone) {
     	input = null;
-    	// TODO
     	ondone.unblock();
     }
 
