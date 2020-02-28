@@ -33,6 +33,20 @@ public class TestDeflateReadable extends TestReadable {
 	
 	private boolean efficient;
 	
+	private IO basicIO;
+	
+	@Override
+	protected void basicTests(IO io) throws Exception {
+		super.basicTests(io);
+		basicIO = io;
+	}
+	
+	@Override
+	public void testBasicCommonFunctions() throws Exception {
+		super.testBasicCommonFunctions();
+		basicIO.getSourceDescription();
+	}
+	
 	@Override
 	protected IO.Readable createReadableFromFile(FileIO.ReadOnly file, long fileSize) throws Exception {
 		File tmp = File.createTempFile("test", "_" + fileSize + "_deflate");

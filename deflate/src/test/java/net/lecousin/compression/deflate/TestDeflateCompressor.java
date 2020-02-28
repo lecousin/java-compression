@@ -20,29 +20,31 @@ import org.junit.runners.Parameterized.Parameters;
 @RunWith(LCConcurrentRunner.Parameterized.class) @org.junit.runners.Parameterized.UseParametersRunnerFactory(LCConcurrentRunner.ConcurrentParameterizedRunnedFactory.class)
 public class TestDeflateCompressor extends LCCoreAbstractTest {
 
-	@Parameters(name = "nbBuf = {2}")
+	@Parameters(name = "nbBuf = {2}, efficient = {3}")
 	public static Collection<Object[]> parameters() {
-		return TestIO.UsingGeneratedTestFiles.generateTestCases(false);
+		return addTestParameter(TestIO.UsingGeneratedTestFiles.generateTestCases(false), Boolean.TRUE, Boolean.FALSE);
 	}
 	
-	public TestDeflateCompressor(File testFile, byte[] testBuf, int nbBuf) {
+	public TestDeflateCompressor(File testFile, byte[] testBuf, int nbBuf, boolean efficient) {
 		this.testFile = testFile;
 		this.testBuf = testBuf;
 		this.nbBuf = nbBuf;
+		this.efficient = efficient;
 	}
 	
 	private File testFile;
 	private byte[] testBuf;
 	private int nbBuf;
+	private boolean efficient;
 	
 	@Test
 	public void test() throws Exception {
 		File tmp = File.createTempFile("test", nbBuf + "_deflate_compressor");
 		tmp.deleteOnExit();
 		FileIO.WriteOnly fout = new FileIO.WriteOnly(tmp, Task.Priority.NORMAL);
-		DeflateCompressor compressor = new DeflateCompressor(false);
+		DeflateCompressor compressor = nbBuf > 100 ? new DeflateCompressor(false) : new DeflateCompressor();
 		FileIO.ReadOnly fin = new FileIO.ReadOnly(testFile, Task.Priority.NORMAL);
-		compressor.compress(fin, fout, 4096, 10, Task.Priority.NORMAL).blockThrow(0);
+		compressor.compress(fin, fout, efficient ? 4096 : 16, efficient ? 10 : 100, Task.Priority.NORMAL).blockThrow(0);
 		fin.close();
 		fout.close();
 		checkFile(tmp);

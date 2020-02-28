@@ -65,13 +65,10 @@ abstract class LZMAEncoder extends LZMACoder {
                         dictSize, extraSizeBefore, mf);
                 break;
 
-            case NORMAL:
+            default: // case NORMAL:
                 m += LZMAEncoderNormal.getMemoryUsage(
                         dictSize, extraSizeBefore, mf);
                 break;
-
-            default:
-                throw new IllegalArgumentException();
         }
 
         return m;
@@ -90,15 +87,12 @@ abstract class LZMAEncoder extends LZMACoder {
                                            niceLen, mf, depthLimit,
                                            byteArrayCache, intArrayCache);
 
-            case NORMAL:
+            default: //case NORMAL:
                 return new LZMAEncoderNormal(rc, lc, lp, pb,
                                              dictSize, extraSizeBefore,
                                              niceLen, mf, depthLimit,
                                              byteArrayCache, intArrayCache);
-            default:
-                throw new IllegalArgumentException();
         }
-
     }
 
     public void putArraysToCache(ByteArrayCache arrayCache, IntArrayCache intArrayCache) {

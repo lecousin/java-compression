@@ -388,7 +388,7 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
 
 	@Override
 	public String getSourceDescription() {
-		return output != null ? "LZMAWritable[" + output.getSourceDescription() + "]" : "LZMAWritable";
+		return output != null ? "LZMA1Writable[" + output.getSourceDescription() + "]" : "LZMA1Writable";
 	}
 
 	@Override
