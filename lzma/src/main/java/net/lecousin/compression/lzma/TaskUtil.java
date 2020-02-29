@@ -19,7 +19,7 @@ final class TaskUtil {
 	}
 	
 	public static Task<Void, NoException> decompressionTask(IO.Readable input, Runnable r, IAsync<IOException> onerror) {
-		return Task.cpu("LZMA Decompression", input.getPriority(), () -> {
+		return Task.cpu("LZMA Decompression", input.getPriority(), t -> {
 			try { r.run(); }
 			catch (Exception e) {
 				onerror.error(IO.error(e));

@@ -5,7 +5,6 @@ import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 import java.util.zip.Deflater;
 
-import net.lecousin.framework.concurrent.Executable;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
@@ -122,7 +121,7 @@ public class DeflateWritable extends ConcurrentCloseable<IOException> implements
 	
 	@Override
 	public AsyncSupplier<Integer,IOException> writeAsync(ByteBuffer buffer, Consumer<Pair<Integer,IOException>> ondone) {
-		return operation(Task.cpu("Compressing data using deflate", priority, () -> {
+		return operation(Task.cpu("Compressing data using deflate", priority, t -> {
 			int len = setInput(buffer);
 			while (!deflater.needsInput()) {
 				byte[] writeBuf = bufferCache.get(len > 8192 ? 8192 : len, true);
@@ -166,34 +165,30 @@ public class DeflateWritable extends ConcurrentCloseable<IOException> implements
 	}
 	
 	/** Indicates that no more data will be compressed and flushes remaining compressed data to the output. */
-	@SuppressWarnings("java:S1604")
 	public IAsync<IOException> finishAsync() {
 		if (finishing != null) return finishing;
 		finishing = new Async<>();
-		Task.cpu("Finishing zip compression", priority, new Executable<Void, NoException>() {
-			@Override
-			public Void execute() {
-				AsyncSupplier<Integer, IOException> lastWrite = null;
-				deflater.finish();
-				if (!deflater.finished()) {
-					do {
-						byte[] writeBuf = bufferCache.get(8192, true);
-						int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
-						if (nb <= 0) break;
-						try { lastWrite = writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb)); }
-						catch (IOException e) {
-							finishing.error(e);
-							return null;
-						}
-					} while (!deflater.finished());
-				}
-				if (lastWrite == null) lastWrite = writeOps.getLastPendingOperation();
-				if (lastWrite != null)
-					lastWrite.onDone(finishing);
-				else
-					finishing.unblock();
-				return null;
+		Task.cpu("Finishing zip compression", priority, (Task<Void, NoException> task) -> {
+			AsyncSupplier<Integer, IOException> lastWrite = null;
+			deflater.finish();
+			if (!deflater.finished()) {
+				do {
+					byte[] writeBuf = bufferCache.get(8192, true);
+					int nb = deflater.deflate(writeBuf, 0, writeBuf.length);
+					if (nb <= 0) break;
+					try { lastWrite = writeOps.write(ByteBuffer.wrap(writeBuf, 0, nb)); }
+					catch (IOException e) {
+						finishing.error(e);
+						return null;
+					}
+				} while (!deflater.finished());
 			}
+			if (lastWrite == null) lastWrite = writeOps.getLastPendingOperation();
+			if (lastWrite != null)
+				lastWrite.onDone(finishing);
+			else
+				finishing.unblock();
+			return null;
 		}).start();
 		Async<IOException> op = operation(new Async<>());
 		finishing.onDone(op);

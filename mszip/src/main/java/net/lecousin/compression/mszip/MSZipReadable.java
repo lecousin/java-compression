@@ -8,9 +8,11 @@ import java.util.zip.Inflater;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.concurrent.threads.TaskManager;
 import net.lecousin.framework.concurrent.threads.Threading;
+import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.memory.ByteArrayCache;
@@ -93,7 +95,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 			dataReady = new Async<>();
 			this.blockIndex = blockIndex;
 			uncompressed = new byte[32768];
-			read.thenStart("Start uncompressing MSZIP block", priority, () -> {
+			read.thenStart("Start uncompressing MSZIP block", priority, (Task<Void, NoException> task) -> {
 				if (read.hasError()) {
 					error = read.getError();
 					dataReady.unblock();
@@ -315,7 +317,7 @@ public class MSZipReadable extends ConcurrentCloseable<IOException> implements I
 		}
 		// wait for current block to have some data uncompressed
 		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-		uncompress.dataReady.thenStart("Read data from MSZip", priority, () -> {
+		uncompress.dataReady.thenStart("Read data from MSZip", priority, task -> {
 			if (error != null) {
 				if (ondone != null) ondone.accept(new Pair<>(null, error));
 				result.error(error);

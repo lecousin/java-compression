@@ -283,7 +283,7 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
 	}
 	
 	public IAsync<IOException> finishAsync() {
-		return Task.cpu("Finishing LZMA1 compression", () -> {
+		return Task.cpu("Finishing LZMA1 compression", (Task<Void, IOException> t) -> {
 			finishSync();
 			return null;
 		}).start().getOutput();

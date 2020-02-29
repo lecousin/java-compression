@@ -7,7 +7,6 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Executable;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
@@ -103,19 +102,15 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 	}
 	
 	@Override
-	@SuppressWarnings("java:S1604")
 	public AsyncSupplier<Integer,IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer,IOException>> ondone) {
 		if (isClosing() || isClosed()) return new AsyncSupplier<>(null, null, new CancelException(ERROR_CLOSED));
 		if (reachEOF)
 			return IOUtil.success(Integer.valueOf(-1), ondone);
 		if (!inflater.needsInput()) {
 			AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-			Task.cpu("Uncompressing zip: " + input.getSourceDescription(), priority, new Executable<Void, NoException>() {
-				@Override
-				public Void execute() {
-					readBufferAsync(buffer, ondone, result);
-					return null;
-				}
+			Task.cpu("Uncompressing zip: " + input.getSourceDescription(), priority, (Task<Void, NoException> t) -> {
+				readBufferAsync(buffer, ondone, result);
+				return null;
 			}).start();
 			return operation(result);
 		}
@@ -203,27 +198,23 @@ public class DeflateReadable extends ConcurrentCloseable<IOException> implements
 		inflater.setInput(readBuf.array(), 0, len);
 	}
 	
-	@SuppressWarnings("java:S1604")
 	private void fillAsync(ByteBuffer buffer, AsyncSupplier<Integer, IOException> result, Consumer<Pair<Integer,IOException>> ondone) {
 		readBuf.clear();
 		AsyncSupplier<Integer, IOException> read = input.readAsync(readBuf);
-		Task.cpu("Uncompressing zip: " + input.getSourceDescription(), priority, new Executable<Void, NoException>() {
-			@Override
-			public Void execute() {
-				if (!read.isSuccessful()) {
-					IOUtil.notSuccess(read, result, ondone);
-					return null;
-				}
-				int len = read.getResult().intValue();
-				if (len <= 0) {
-					if (isClosing() || isClosed()) result.cancel(new CancelException(ERROR_CLOSED));
-					else IOUtil.error(new IOException("Unexpected end of zip input"), result, ondone);
-					return null;
-				}
-				inflater.setInput(readBuf.array(), 0, len);
-				readBufferAsync(buffer, ondone, result);
+		Task.cpu("Uncompressing zip: " + input.getSourceDescription(), priority, (Task<Void, NoException> task) -> {
+			if (!read.isSuccessful()) {
+				IOUtil.notSuccess(read, result, ondone);
 				return null;
 			}
+			int len = read.getResult().intValue();
+			if (len <= 0) {
+				if (isClosing() || isClosed()) result.cancel(new CancelException(ERROR_CLOSED));
+				else IOUtil.error(new IOException("Unexpected end of zip input"), result, ondone);
+				return null;
+			}
+			inflater.setInput(readBuf.array(), 0, len);
+			readBufferAsync(buffer, ondone, result);
+			return null;
 		}).startOn(read, true);
 	}
 

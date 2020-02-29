@@ -133,7 +133,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 			nextBuffer().onDone(this::readHeader);
 			return;
 		}
-		Task.cpu("Read GZip header", priority, this::readHeaderTask).start();
+		Task.cpu("Read GZip header", priority, t -> readHeaderTask()).start();
 	}
 	
 	private Void readHeaderTask() {
@@ -366,7 +366,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 		private boolean setInput;
 
 		@Override
-		public Void execute() {
+		public Void execute(Task<Void, NoException> taskContext) throws CancelException {
 			if (isClosing() || isClosed() || input == null) {
 				inflateResult.cancel(new CancelException("GZip closed"));
 				return null;
@@ -380,6 +380,7 @@ public class GZipReadable extends ConcurrentCloseable<IOException> implements IO
 				int n;
 				int total = 0;
 				do {
+					if (taskContext.isCancelling()) throw taskContext.getCancelEvent();
 					if (isClosing() || isClosed() || input == null) {
 						inflateResult.cancel(new CancelException("GZip closed"));
 						return null;

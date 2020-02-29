@@ -658,12 +658,12 @@ public class LZMA1Readable extends ConcurrentCloseable<IOException> implements I
     
     @Override
     public AsyncSupplier<Integer, IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
-    	return Task.cpu("Read LZMA1", input.getPriority(), () -> Integer.valueOf(readSync(buffer, false)), ondone).start().getOutput();
+    	return Task.cpu("Read LZMA1", input.getPriority(), t -> Integer.valueOf(readSync(buffer, false)), ondone).start().getOutput();
     }
     
     @Override
     public AsyncSupplier<Integer, IOException> readFullyAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
-    	return Task.cpu("Read LZMA1", input.getPriority(), () -> Integer.valueOf(readSync(buffer, true)), ondone).start().getOutput();
+    	return Task.cpu("Read LZMA1", input.getPriority(), t -> Integer.valueOf(readSync(buffer, true)), ondone).start().getOutput();
     }
 
     private void putArraysToCache() {

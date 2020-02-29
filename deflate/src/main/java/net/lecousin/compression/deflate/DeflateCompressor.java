@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.zip.Deflater;
 
+import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Executable;
 import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
@@ -94,14 +95,14 @@ public class DeflateCompressor {
 		private Async<Exception> end;
 		
 		@Override
-		public Void execute() throws Exception {
+		public Void execute(Task<Void, Exception> taskContext) throws Exception {
 			if (readTask.isCancelled() || end.isCancelled()) return null;
 			if (!readTask.isSuccessful()) {
 				end.error(readTask.getError());
 				throw readTask.getError();
 			}
 			try {
-				compress();
+				compress(taskContext);
 			} catch (Exception e) {
 				end.error(e);
 				throw e;
@@ -119,7 +120,7 @@ public class DeflateCompressor {
 			private ByteBuffer writeBuf;
 		}
 		
-		private void compress() throws IOException {
+		private void compress(Task<Void, Exception> taskContext) throws IOException, CancelException {
 			// compress data
 			int nb = readTask.getResult().intValue();
 			CompressStatus status = new CompressStatus(0, ByteBuffer.wrap(cache.get(bufferSize, false)));
@@ -127,7 +128,7 @@ public class DeflateCompressor {
 				// end of data
 				deflater.finish();
 				while (!deflater.finished()) {
-					if (compressLoop(status))
+					if (compressLoop(status, taskContext))
 						break;
 				}
 				deflater.end();
@@ -135,7 +136,7 @@ public class DeflateCompressor {
 			} else {
 				deflater.setInput(readBuf, 0, nb);
 				while (!deflater.needsInput() && !end.isCancelled()) {
-					if (compressLoop(status))
+					if (compressLoop(status, taskContext))
 						break;
 				}
 			}
@@ -147,7 +148,8 @@ public class DeflateCompressor {
 			}
 		}
 		
-		private boolean compressLoop(CompressStatus status) throws IOException {
+		private boolean compressLoop(CompressStatus status, Task<Void, Exception> taskContext) throws IOException, CancelException {
+			if (taskContext.isCancelling()) throw taskContext.getCancelEvent();
 			if (status.writeBuf == null) status.writeBuf = ByteBuffer.wrap(cache.get(bufferSize, false));
 			int nb = deflater.deflate(status.writeBuf.array(), status.pos, status.writeBuf.capacity() - status.pos);
 			if (nb <= 0) return true;

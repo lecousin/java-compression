@@ -57,7 +57,7 @@ public class GZipWritable extends DeflateWritable {
 		int initPos = buffer.position();
 		AsyncSupplier<Integer, IOException> write = super.writeAsync(buffer, null);
 		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
-		operation(Task.cpu("Update GZip CRC", getPriority(), () -> {
+		operation(Task.cpu("Update GZip CRC", getPriority(), t -> {
 			if (write.forwardIfNotSuccessful(result))
 				return null;
 			int nb = write.getResult().intValue();
@@ -107,7 +107,7 @@ public class GZipWritable extends DeflateWritable {
 			return operation(result);
 		}
 		IAsync<IOException> finish = super.finishAsync();
-		finish.thenStart("Write GZip trailer", getPriority(), () -> {
+		finish.thenStart("Write GZip trailer", getPriority(), t -> {
 			byte[] trailer = new byte[8];
 			DataUtil.Write32U.LE.write(trailer, 0, (int)crc.getValue());
 			DataUtil.Write32U.LE.write(trailer, 4, deflater.getTotalIn());
@@ -118,7 +118,7 @@ public class GZipWritable extends DeflateWritable {
 	}
 	
 	private void writeHeader() {
-		Task.cpu("Prepare GZip header", getPriority(), () -> {
+		Task.cpu("Prepare GZip header", getPriority(), t -> {
 			byte[] header = new byte[10];
 			// magic number
 			header[0] = 0x1F;
