@@ -4,41 +4,27 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
-import net.lecousin.framework.concurrent.threads.Task;
-import net.lecousin.framework.concurrent.threads.Task.Priority;
-import net.lecousin.framework.concurrent.threads.TaskManager;
-import net.lecousin.framework.concurrent.threads.Threading;
-import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.memory.IntArrayCache;
-import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
 
-public class LZMA2Writable extends ConcurrentCloseable<IOException> implements IO.Writable {
+public class LZMA2Writable extends AbstractLZMAWritable {
 
     static final int COMPRESSED_SIZE_MAX = 64 << 10;
 
-    private final ByteArrayCache byteArrayCache;
-    private final IntArrayCache intArrayCache;
-
-    private IO.Writable.Buffered output;
-
-    private LZEncoder lz;
     private RangeEncoderToBuffer rc;
-    private LZMAEncoder lzma;
 
-    private final int props; // Cannot change props on the fly for now.
     private boolean dictResetNeeded = true;
     private boolean stateResetNeeded = true;
     private boolean propsNeeded = true;
 
     private int pendingSize = 0;
-    private boolean finished = false;
 
     private static int getExtraSizeBefore(int dictSize) {
         return COMPRESSED_SIZE_MAX > dictSize
@@ -59,9 +45,7 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
     }
     
     public LZMA2Writable(IO.Writable.Buffered output, LZMA2Options options, ByteArrayCache byteArrayCache, IntArrayCache intArrayCache) {
-        this.byteArrayCache = byteArrayCache;
-        this.intArrayCache = intArrayCache;
-        this.output = output;
+		super(output, byteArrayCache, intArrayCache);
         rc = new RangeEncoderToBuffer(COMPRESSED_SIZE_MAX, byteArrayCache);
 
         int dictSize = options.getDictSize();
@@ -293,7 +277,8 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
         return new Async<>(true);
     }
 
-    public void finishSync() throws IOException {
+    @Override
+	public void finishSync() throws IOException {
         assert !finished;
 
         lz.setFinishing();
@@ -315,7 +300,8 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
         output.flush().blockException(0);
     }
 
-    public IAsync<IOException> finishAsync() {
+    @Override
+	public IAsync<IOException> finishAsync() {
         assert !finished;
 
         lz.setFinishing();
@@ -355,54 +341,5 @@ public class LZMA2Writable extends ConcurrentCloseable<IOException> implements I
         rc = null;
         output.flush().onDone(sp);
     }
-    
-    @Override
-    protected IAsync<IOException> closeUnderlyingResources() {
-    	if (output != null) {
-    		if (!finished) {
-    			Async<IOException> sp = new Async<>();
-    			finishAsync().onDone(() -> output.closeAsync().onDone(sp), sp);
-    			return sp;
-    		}
-    		return output.closeAsync();
-    	}
-    	return new Async<>(true);
-    }
-    
-    @Override
-    protected void closeResources(Async<IOException> ondone) {
-    	output = null;
-    	ondone.unblock();
-    }
-
-	@Override
-	public String getSourceDescription() {
-		return output != null ? "LZMA1Writable[" + output.getSourceDescription() + "]" : "LZMA1Writable";
-	}
-
-	@Override
-	public IO getWrappedIO() {
-		return output;
-	}
-
-	@Override
-	public void setPriority(Priority priority) {
-		if (output != null) output.setPriority(priority);
-	}
-
-	@Override
-	public Priority getPriority() {
-		return output != null ? output.getPriority() : Task.Priority.NORMAL;
-	}
-
-	@Override
-	public TaskManager getTaskManager() {
-		return Threading.getCPUTaskManager();
-	}
-
-	@Override
-	public IAsync<IOException> canStartWriting() {
-		return output.canStartWriting();
-	}
 	
 }

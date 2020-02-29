@@ -4,31 +4,19 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
-import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.concurrent.threads.Task;
-import net.lecousin.framework.concurrent.threads.Task.Priority;
-import net.lecousin.framework.concurrent.threads.TaskManager;
-import net.lecousin.framework.concurrent.threads.Threading;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.memory.ByteArrayCache;
 import net.lecousin.framework.memory.IntArrayCache;
-import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
 
-public class LZMA1Writable extends ConcurrentCloseable<IOException> implements IO.Writable {
-	private IO.Writable.Buffered output;
+public class LZMA1Writable extends AbstractLZMAWritable {
 
-	private final ByteArrayCache byteArrayCache;
-	private final IntArrayCache intArrayCache;
-
-	private LZEncoder lz;
 	private final RangeEncoderToStream rc;
-	private LZMAEncoder lzma;
 
-	private final int props;
 	private final boolean useEndMarker;
 	private final long expectedUncompressedSize;
 	private long currentUncompressedSize = 0;
@@ -39,13 +27,10 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
 		IO.Writable.Buffered output, LZMA2Options options, boolean useHeader, boolean useEndMarker,
 		long expectedUncompressedSize, ByteArrayCache byteArrayCache, IntArrayCache intArrayCache
 	) throws IOException {
+		super(output, byteArrayCache, intArrayCache);
 		this.useEndMarker = useEndMarker;
 		this.expectedUncompressedSize = expectedUncompressedSize;
 
-		this.byteArrayCache = byteArrayCache;
-        this.intArrayCache = intArrayCache;
-        this.output = output;
-        
 		rc = new RangeEncoderToStream(output);
 
 		int dictSize = options.getDictSize();
@@ -258,6 +243,7 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
 	/**
 	 * Finishes the stream without closing the underlying OutputStream.
 	 */
+	@Override
 	public void finishSync() throws IOException {
 		if (!finished) {
 			if (expectedUncompressedSize != -1 && expectedUncompressedSize != currentUncompressedSize)
@@ -282,60 +268,12 @@ public class LZMA1Writable extends ConcurrentCloseable<IOException> implements I
 		}
 	}
 	
+	@Override
 	public IAsync<IOException> finishAsync() {
 		return Task.cpu("Finishing LZMA1 compression", (Task<Void, IOException> t) -> {
 			finishSync();
 			return null;
 		}).start().getOutput();
-	}
-
-    @Override
-    protected void closeResources(Async<IOException> ondone) {
-    	output = null;
-    	ondone.unblock();
-    }
-
-	@Override
-    protected IAsync<IOException> closeUnderlyingResources() {
-		if (output != null) {
-    		if (!finished) {
-    			Async<IOException> sp = new Async<>();
-    			finishAsync().onDone(() -> output.closeAsync().onDone(sp), sp);
-    			return sp;
-    		}
-    		return output.closeAsync();
-    	}
-    	return new Async<>(true);
-	}
-
-	@Override
-	public IO getWrappedIO() {
-		return output;
-	}
-
-	@Override
-	public String getSourceDescription() {
-		return output != null ? "LZMA2Writable[" + output.getSourceDescription() + "]" : "LZMA2Writable";
-	}
-
-	@Override
-	public Priority getPriority() {
-		return output != null ? output.getPriority() : Task.Priority.NORMAL;
-	}
-
-	@Override
-	public void setPriority(Priority priority) {
-		if (output != null) output.setPriority(priority);
-	}
-
-	@Override
-	public IAsync<IOException> canStartWriting() {
-		return output.canStartWriting();
-	}
-
-	@Override
-	public TaskManager getTaskManager() {
-		return Threading.getCPUTaskManager();
 	}
 
 }
