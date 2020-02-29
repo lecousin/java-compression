@@ -21,8 +21,6 @@ public class LZMA1Writable extends AbstractLZMAWritable {
 	private final long expectedUncompressedSize;
 	private long currentUncompressedSize = 0;
 
-	private boolean finished = false;
-
 	private LZMA1Writable(
 		IO.Writable.Buffered output, LZMA2Options options, boolean useHeader, boolean useEndMarker,
 		long expectedUncompressedSize, ByteArrayCache byteArrayCache, IntArrayCache intArrayCache
