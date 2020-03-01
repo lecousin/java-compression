@@ -14,9 +14,16 @@ install:
   - cmd: SET MAVEN_OPTS=-Xmx2048m
   - cmd: SET JAVA_OPTS=-XX:+UseG1GC -Xmx2048m
 build_script:
-  - mvn clean package --batch-mode -DskipTest
+  - mvn clean package --batch-mode -DskipTests
 test_script:
   - mvn test verify --batch-mode
+after_test:
+ - "SET PATH=C:\\Python34;C:\\Python34\\Scripts;%PATH%"
+ - pip install codecov
+ - codecov -f "deflate/target/site/jacoco/jacoco.xml"
+ - codecov -f "gzip/target/site/jacoco/jacoco.xml"
+ - codecov -f "lzma/target/site/jacoco/jacoco.xml"
+ - codecov -f "mszip/target/site/jacoco/jacoco.xml"
 cache:
   - C:\maven\
   - C:\Users\appveyor\.m2
